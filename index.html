@@ -1,0 +1,619 @@
+<title>GML Graph Viewer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: full-height tool — control rail on the left, graph canvas fills the rest; stacks on phones */
+:root{
+  --bg:#f3f5f7; --panel:#ffffff; --fg:#17202a; --muted:#5b6774; --line:#dfe4ea;
+  --accent:#1f5f8b; --accent-fg:#ffffff; --canvas:#fbfcfd; --edge:23,32,42; --label:#17202a; --halo:rgba(251,252,253,.85); --warn:#a23b2a; --inter:#4a4f56;
+  --f-display:"Space Grotesk",system-ui,sans-serif; --f-body:"Inter",system-ui,-apple-system,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1418; --panel:#161d23; --fg:#e4e9ee; --muted:#93a0ad; --line:#26313a;
+  --accent:#5aa7d8; --accent-fg:#0b1217; --canvas:#11171c; --edge:210,222,232; --label:#e8edf2; --halo:rgba(17,23,28,.85); --warn:#f08a74; --inter:#7d8792; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1418; --panel:#161d23; --fg:#e4e9ee; --muted:#93a0ad; --line:#26313a;
+  --accent:#5aa7d8; --accent-fg:#0b1217; --canvas:#11171c; --edge:210,222,232; --label:#e8edf2; --halo:rgba(17,23,28,.85); --warn:#f08a74; --inter:#7d8792; color-scheme:dark}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px}
+.app{height:100%;display:grid;grid-template-columns:300px 1fr;min-height:0}
+aside{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;
+  padding-block:18px 24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:16px;display:flex;flex-direction:column;gap:20px}
+h1{font-family:var(--f-display);font-weight:600;font-size:19px;line-height:1.2;margin:0;text-wrap:balance;overflow-wrap:anywhere}
+.sub{color:var(--muted);font-size:12.5px;margin-top:4px;font-variant-numeric:tabular-nums}
+h2{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.legend{display:grid;gap:2px;max-height:330px;overflow-y:auto}
+.lg{display:grid;grid-template-columns:14px minmax(0,1fr) auto;align-items:center;gap:10px;padding:5px 8px;border-radius:6px;cursor:pointer;border:0;background:none;color:inherit;font:inherit;text-align:left;width:100%}
+.lg:hover{background:color-mix(in srgb,var(--fg) 6%,transparent)}
+.lg.off{opacity:.38}
+.lg .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lg small{color:var(--muted);margin-left:6px}
+.sw{width:14px;height:14px;border-radius:50%}
+.lg .n{color:var(--muted);font-variant-numeric:tabular-nums;font-size:12.5px}
+.hint{color:var(--muted);font-size:12px;line-height:1.45;margin:6px 0 0}
+select{font:inherit;font-size:13px;width:100%;padding:7px 8px;border-radius:7px;border:1px solid var(--line);background:var(--panel);color:var(--fg);margin-bottom:10px}
+button.b{font:inherit;font-weight:500;font-size:13px;padding:7px 12px;border-radius:7px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer}
+button.b:hover{border-color:var(--muted)}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);width:100%;padding:9px 12px}
+button.primary:hover{filter:brightness(1.08);border-color:var(--accent)}
+button.wide{width:100%}
+button.b[aria-pressed="true"]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
+button:focus-visible,.lg:focus-visible,select:focus-visible,label.file:focus-within,.fmt label:focus-within span{outline:2px solid var(--accent);outline-offset:2px}
+.fmt{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px}
+.fmt label{position:relative;cursor:pointer}
+.fmt input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.fmt span{display:block;text-align:center;padding:7px 0;border:1px solid var(--line);border-radius:7px;font-weight:600;font-size:12.5px;letter-spacing:.04em}
+.fmt input:checked+span{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.chk{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;cursor:pointer}
+.status{font-size:12px;color:var(--muted);min-height:1.2em;margin-top:8px;overflow-wrap:anywhere}
+.status.err{color:var(--warn)}
+label.file{display:block;text-align:center;font-weight:500;font-size:13px;padding:8px 12px;border-radius:7px;border:1px dashed var(--muted);cursor:pointer;position:relative}
+label.file:hover{border-color:var(--accent)}
+label.file input{position:absolute;width:1px;height:1px;opacity:0}
+main{position:relative;min-width:0;min-height:0;background:var(--canvas)}
+canvas#cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+canvas#cv.drag{cursor:grabbing}
+canvas#cv.over{cursor:pointer}
+.drop{position:absolute;inset:12px;border:2px dashed var(--accent);border-radius:12px;display:grid;place-items:center;font-family:var(--f-display);font-size:18px;color:var(--fg);background:color-mix(in srgb,var(--canvas) 80%,transparent);pointer-events:none;z-index:4}
+.busy{position:absolute;left:50%;top:16px;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:12.5px;z-index:4}
+.zoom{position:absolute;right:calc(14px + env(safe-area-inset-right,0px));bottom:14px;display:flex;flex-direction:column;gap:6px}
+.zoom button{width:34px;height:34px;padding:0;font-size:16px;line-height:1}
+.row{display:flex;gap:8px}.row>*{flex:1}
+.ctl{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:8px 10px;margin-top:10px;font-size:13px}
+.ctl select{margin:0}
+.ctl input[type=range]{width:100%;accent-color:var(--accent)}
+canvas#cv.move{cursor:move}
+.cled{position:absolute;z-index:5;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;box-shadow:0 6px 24px rgba(0,0,0,.16);display:grid;gap:8px;width:230px}
+.cled textarea{font:inherit;font-size:14px;line-height:1.35;padding:7px 9px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--fg);width:100%;box-sizing:border-box;resize:vertical;min-height:4.4em}
+.cled .kb{font-size:11.5px;color:var(--muted);margin:0}
+.cled textarea:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.cled .del{color:var(--warn)}
+.cled .ok{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px;box-shadow:0 4px 18px rgba(0,0,0,.12);min-width:160px;max-width:300px;z-index:3}
+.tip b{font-family:var(--f-display);font-size:14px;display:block;margin-bottom:4px;overflow-wrap:anywhere}
+.tip table{border-collapse:collapse;font-variant-numeric:tabular-nums}
+.tip td{padding:1px 0;vertical-align:top;overflow-wrap:anywhere}.tip td:first-child{color:var(--muted);padding-right:12px;white-space:nowrap}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (max-width:760px){
+  .app{grid-template-columns:1fr;grid-template-rows:62vh auto;height:auto}
+  main{order:-1;height:62vh}
+  aside{border-right:0;border-top:1px solid var(--line);overflow:visible;padding-right:max(16px,env(safe-area-inset-right,0px))}
+}
+</style>
+
+<div class="app">
+  <aside>
+    <div>
+      <h1 id="title">Graph</h1>
+      <div class="sub" id="meta"></div>
+    </div>
+    <section>
+      <label class="file">Open GML file…<input type="file" id="file" accept=".gml,text/plain"></label>
+      <p class="hint">Or drop a .gml file onto the graph. The sample loaded now is your One Piece discourse network.</p>
+      <div class="status" id="loadStatus" aria-live="polite"></div>
+    </section>
+    <section>
+      <h2>Color nodes by</h2>
+      <select id="colorBy" aria-label="Color nodes by"></select>
+      <div class="legend" id="legend"></div>
+      <p class="hint" id="legendHint">Click a group to dim or show it.</p>
+    </section>
+    <section>
+      <h2>Labels</h2>
+      <button class="b wide" id="labelToggle" aria-pressed="false">Show Labels</button>
+      <p class="hint">Click any node to show or hide its own label. Drag to pan, scroll or pinch to zoom.</p>
+    </section>
+    <section>
+      <h2>Cluster labels</h2>
+      <div class="row">
+        <button class="b" id="clAdd">Add Cluster Labels</button>
+        <button class="b" id="clClear" disabled>Remove All</button>
+      </div>
+      <div class="ctl">
+        <label for="clStyle">Style</label>
+        <select id="clStyle"><option value="text">Colored text</option><option value="badge">Colored badge</option></select>
+        <label for="clSize">Size</label>
+        <input type="range" id="clSize" min="11" max="32" value="17">
+      </div>
+      <p class="hint">Drag a cluster label to move it. Click it to edit the text (several lines allowed) or delete it.</p>
+    </section>
+    <section>
+      <h2>Save graph</h2>
+      <div class="fmt" role="radiogroup" aria-label="Image format">
+        <label><input type="radio" name="fmt" id="fmt-tiff" value="tiff"><span>TIFF</span></label>
+        <label><input type="radio" name="fmt" id="fmt-jpeg" value="jpeg"><span>JPEG</span></label>
+        <label><input type="radio" name="fmt" id="fmt-png" value="png" checked><span>PNG</span></label>
+      </div>
+      <label class="chk"><input type="checkbox" id="incLegend" checked> Include color legend</label>
+      <button class="b primary" id="save">Save graph</button>
+      <div class="status" id="status" aria-live="polite"></div>
+    </section>
+  </aside>
+  <main>
+    <canvas id="cv" aria-label="Network graph"></canvas>
+    <div class="tip" id="tip" hidden></div>
+    <div class="drop" id="drop" hidden>Drop GML file to open it</div>
+    <div class="cled" id="clEd" hidden role="dialog" aria-label="Edit cluster label">
+      <textarea id="clEdText" rows="3" maxlength="300" aria-label="Cluster label text"></textarea>
+      <p class="kb">Enter starts a new line. Ctrl+Enter or Done saves.</p>
+      <div class="row"><button class="b del" id="clEdDel">Delete</button><button class="b ok" id="clEdDone">Done</button></div>
+    </div>
+    <div class="busy" id="busy" hidden>Laying out graph…</div>
+    <div class="zoom">
+      <button class="b" id="zin" aria-label="Zoom in">+</button>
+      <button class="b" id="zout" aria-label="Zoom out">−</button>
+      <button class="b" id="zfit" aria-label="Fit graph">⤢</button>
+    </div>
+  </main>
+</div>
+
+<script type="text/plain" id="sample">graph [ Creator "Gephi" directed 0 node [ id 0 label "rakyat" graphics [ x -53.4190 y 370.0433 w 10.0 fill "#c0c0c0" ] frequency "26349" Cluster "8" EigenvectorCentrality "0.0637" ] node [ id 1 label "bendera" graphics [ x 277.3616 y -67.4486 w 8.0661 fill "#df89ff" ] frequency "18024" Cluster "0" EigenvectorCentrality "0.4108" ] node [ id 3 label "pemerintah" graphics [ x -194.4445 y 227.4404 w 7.1557 fill "#ff8805" ] frequency "14105" Cluster "4" EigenvectorCentrality "0.0343" ] node [ id 4 label "indonesia" graphics [ x 240.047 y -323.8107 w 6.4618 fill "#4c463e" ] frequency "11118" Cluster "3" EigenvectorCentrality "0.0312" ] node [ id 5 label "koruptor" graphics [ x -279.9717 y -133.3564 w 6.3032 fill "#73c000" ] frequency "10435" Cluster "1" EigenvectorCentrality "0.4950" ] node [ id 6 label "bendera_one_piece" graphics [ x 398.4692 y -140.4095 w 5.8534 fill "#df89ff" ] frequency "8499" Cluster "0" EigenvectorCentrality "0.3537" ] node [ id 7 label "pejabat" graphics [ x -172.8878 y 124.7348 w 5.8493 fill "#ff8805" ] frequency "8481" Cluster "4" EigenvectorCentrality "0.1185" ] node [ id 8 label "one_piece" graphics [ x 418.0123 y -53.4392 w 5.4722 fill "#df89ff" ] frequency "6858" Cluster "0" EigenvectorCentrality "0.3159" ] node [ id 9 label "bangsa" graphics [ x -41.7495 y -16.3115 w 5.0962 fill "#d3b3b0" ] frequency "5239" Cluster "7" EigenvectorCentrality "0.0392" ] node [ id 10 label "dpr" graphics [ x -165.8806 y 331.8547 w 5.0244 fill "#00bd94" ] frequency "4930" Cluster "6" EigenvectorCentrality "0.0269" ] node [ id 11 label "korupsi" graphics [ x -253.6164 y -83.2119 w 5.0014 fill "#73c000" ] frequency "4831" Cluster "1" EigenvectorCentrality "0.1936" ] node [ id 12 label "merah_putih" graphics [ x 228.3899 y -192.2668 w 5.0005 fill "#4c463e" ] frequency "4827" Cluster "3" EigenvectorCentrality "0.2342" ] node [ id 13 label "masyarakat" graphics [ x 18.7969 y 313.6794 w 4.9963 fill "#c0c0c0" ] frequency "4809" Cluster "8" EigenvectorCentrality "0.1158" ] node [ id 15 label "bendera_merah_putih" graphics [ x 215.3913 y -131.4713 w 4.7754 fill "#4c463e" ] frequency "3858" Cluster "3" EigenvectorCentrality "0.4570" ] node [ id 16 label "mengibarkan" graphics [ x 107.3466 y -151.8857 w 4.7052 fill "#ff5584" ] frequency "3556" Cluster "5" EigenvectorCentrality "0.2461" ] node [ id 17 label "negeri" graphics [ x -84.6701 y -116.9465 w 4.6652 fill "#ff5584" ] frequency "3384" Cluster "5" EigenvectorCentrality "0.0231" ] node [ id 18 label "hukum" graphics [ x -278.4958 y -168.2452 w 4.6562 fill "#73c000" ] frequency "3345" Cluster "1" EigenvectorCentrality "0.1963" ] node [ id 19 label "merdeka" graphics [ x 82.5300 y -195.9356 w 4.5721 fill "#4c463e" ] frequency "2983" Cluster "3" EigenvectorCentrality "0.0447" ] node [ id 20 label "memecah-belah" graphics [ x -11.5101 y -39.3790 w 4.5470 fill "#d3b3b0" ] frequency "2875" Cluster "7" EigenvectorCentrality "0.1027" ] node [ id 21 label "pemerintahan" graphics [ x -194.4285 y 268.4933 w 4.5454 fill "#ff8805" ] frequency "2868" Cluster "4" EigenvectorCentrality "0.0150" ] node [ id 22 label "prabowo" graphics [ x -189.5698 y 460.8781 w 4.5017 fill "#00bd94" ] frequency "2680" Cluster "6" EigenvectorCentrality "0.0077" ] node [ id 23 label "simbol" graphics [ x 176.3703 y 107.9467 w 4.4606 fill "#00c4ff" ] frequency "2503" Cluster "2" EigenvectorCentrality "0.1840" ] node [ id 24 label "korup" graphics [ x -224.5613 y -47.8848 w 4.4564 fill "#73c000" ] frequency "2485" Cluster "1" EigenvectorCentrality "0.2338" ] node [ id 25 label "kemerdekaan" graphics [ x 127.9114 y -283.6088 w 4.4478 fill "#4c463e" ] frequency "2448" Cluster "3" EigenvectorCentrality "0.2251" ] node [ id 26 label "presiden" graphics [ x -164.0950 y 398.1030 w 4.4281 fill "#00bd94" ] frequency "2363" Cluster "6" EigenvectorCentrality "0.0129" ] node [ id 27 label "bajak_laut" graphics [ x 336.1238 y -71.4155 w 4.4014 fill "#df89ff" ] frequency "2248" Cluster "0" EigenvectorCentrality "0.2222" ] node [ id 28 label "kritik" graphics [ x 202.8487 y 201.4100 w 4.3863 fill "#00c4ff" ] frequency "2183" Cluster "2" EigenvectorCentrality "0.2721" ] node [ id 29 label "kebijakan" graphics [ x -431.8364 y -335.4783 w 4.3856 fill "#c0c0c0" ] frequency "2180" Cluster "9" EigenvectorCentrality "0.0254" ] node [ id 30 label "kibarkan" graphics [ x -13.5584 y -203.7519 w 4.3644 fill "#ff5584" ] frequency "2089" Cluster "5" EigenvectorCentrality "0.1966" ] node [ id 32 label "bentuk" graphics [ x 117.5214 y 172.3853 w 4.3554 fill "#00c4ff" ] frequency "2050" Cluster "2" EigenvectorCentrality "0.2799" ] node [ id 33 label "makar" graphics [ x -131.9699 y -36.8782 w 4.3465 fill "#d3b3b0" ] frequency "2012" Cluster "7" EigenvectorCentrality "0.1425" ] node [ id 36 label "pajak" graphics [ x -505.2103 y -183.1340 w 4.3154 fill "#73c000" ] frequency "1878" Cluster "1" EigenvectorCentrality "0.3682" ] node [ id 37 label "rakyatnya" graphics [ x -54.9874 y 329.1001 w 4.3119 fill "#c0c0c0" ] frequency "1863" Cluster "8" EigenvectorCentrality "0.0759" ] node [ id 38 label "berkibar" graphics [ x 31.9340 y -140.7935 w 4.2982 fill "#ff5584" ] frequency "1804" Cluster "5" EigenvectorCentrality "0.1911" ] node [ id 40 label "kecewa" graphics [ x 195.2817 y 241.0197 w 4.2775 fill "#00c4ff" ] frequency "1715" Cluster "2" EigenvectorCentrality "0.1286" ] node [ id 41 label "pasang" graphics [ x 7.5653 y -176.8334 w 4.2738 fill "#ff5584" ] frequency "1699" Cluster "5" EigenvectorCentrality "0.1764" ] node [ id 42 label "uu" graphics [ x -370.8106 y -255.0402 w 4.2671 fill "#73c000" ] frequency "1670" Cluster "1" EigenvectorCentrality "0.2357" ] node [ id 43 label "protes" graphics [ x 121.9313 y 240.5632 w 4.2666 fill "#00c4ff" ] frequency "1668" Cluster "2" EigenvectorCentrality "0.3312" ] node [ id 44 label "nkri" graphics [ x 130.6509 y -335.9405 w 4.2643 fill "#4c463e" ] frequency "1658" Cluster "3" EigenvectorCentrality "0.0312" ] node [ id 45 label "dikibarkan" graphics [ x 57.2795 y -166.9976 w 4.2638 fill "#ff5584" ] frequency "1656" Cluster "5" EigenvectorCentrality "0.3627" ] node [ id 48 label "uang" graphics [ x -431.2293 y -122.6096 w 4.2457 fill "#73c000" ] frequency "1578" Cluster "1" EigenvectorCentrality "0.5717" ] node [ id 50 label "pahlawan" graphics [ x 124.8052 y -202.7164 w 4.2394 fill "#4c463e" ] frequency "1551" Cluster "3" EigenvectorCentrality "0.2529" ] node [ id 51 label "konoha" graphics [ x 471.9340 y 75.9666 w 4.2364 fill "#df89ff" ] frequency "1538" Cluster "0" EigenvectorCentrality "0.1031" ] node [ id 52 label "keadilan" graphics [ x 35.0114 y 159.4932 w 4.2362 fill "#00c4ff" ] frequency "1537" Cluster "2" EigenvectorCentrality "0.0429" ] node [ id 55 label "rakyat_kecil" graphics [ x -29.8014 y 285.7701 w 4.2134 fill "#c0c0c0" ] frequency "1439" Cluster "8" EigenvectorCentrality "0.0538" ] node [ id 56 label "aturan" graphics [ x -403.6799 y -307.7270 w 4.2072 fill "#c0c0c0" ] frequency "1412" Cluster "9" EigenvectorCentrality "0.0552" ] node [ id 57 label "mati" graphics [ x -345.7220 y -227.8798 w 4.2048 fill "#73c000" ] frequency "1402" Cluster "1" EigenvectorCentrality "0.3239" ] node [ id 58 label "melawan" graphics [ x 100.4827 y 72.7962 w 4.1944 fill "#00c4ff" ] frequency "1357" Cluster "2" EigenvectorCentrality "0.1181" ] node [ id 59 label "anime" graphics [ x 397.3879 y -8.6959 w 4.1937 fill "#df89ff" ] frequency "1354" Cluster "0" EigenvectorCentrality "0.3934" ] node [ id 60 label "pemimpin" graphics [ x -221.1726 y 164.3346 w 4.1700 fill "#ff8805" ] frequency "1252" Cluster "4" EigenvectorCentrality "0.0598" ] node [ id 61 label "asset" graphics [ x -465.7126 y -191.0589 w 4.1670 fill "#73c000" ] frequency "1239" Cluster "1" EigenvectorCentrality "0.5608" ] node [ id 62 label "tanah" graphics [ x -502.4439 y -223.1998 w 4.1628 fill "#73c000" ] frequency "1221" Cluster "1" EigenvectorCentrality "0.5966" ] node [ id 63 label "penguasa" graphics [ x -144.9935 y 200.2105 w 4.1577 fill "#ff8805" ] frequency "1199" Cluster "4" EigenvectorCentrality "0.0612" ] node [ id 64 label "paham" graphics [ x 444.0102 y 95.9475 w 4.1547 fill "#df89ff" ] frequency "1186" Cluster "0" EigenvectorCentrality "0.0691" ] node [ id 65 label "introspeksi" graphics [ x 320.6360 y 134.6727 w 4.1535 fill "#df89ff" ] frequency "1181" Cluster "0" EigenvectorCentrality "0.1656" ] node [ id 67 label "kerja" graphics [ x -449.377 y -47.7316 w 4.1398 fill "#73c000" ] frequency "1122" Cluster "1" EigenvectorCentrality "0.0459" ] node [ id 68 label "lambang" graphics [ x 255.2893 y -39.5798 w 4.1377 fill "#df89ff" ] frequency "1113" Cluster "0" EigenvectorCentrality "0.2176" ] node [ id 69 label "wakil" graphics [ x -66.2184 y 282.3478 w 4.1349 fill "#00bd94" ] frequency "1101" Cluster "6" EigenvectorCentrality "0.0555" ] node [ id 70 label "warga" graphics [ x 23.1311 y 399.3672 w 4.1312 fill "#c0c0c0" ] frequency "1085" Cluster "8" EigenvectorCentrality "0.0538" ] node [ id 71 label "kekecewaan" graphics [ x 61.9772 y 224.3456 w 4.1289 fill "#00c4ff" ] frequency "1075" Cluster "2" EigenvectorCentrality "0.3668" ] node [ id 72 label "susah" graphics [ x -478.7605 y -70.9103 w 4.1256 fill "#73c000" ] frequency "1061" Cluster "1" EigenvectorCentrality "0.0709" ] node [ id 73 label "sadar" graphics [ x 370.1477 y 143.1595 w 4.1254 fill "#df89ff" ] frequency "1060" Cluster "0" EigenvectorCentrality "0.1640" ] node [ id 75 label "membuat" graphics [ x -488.5658 y -311.2107 w 4.1235 fill "#c0c0c0" ] frequency "1052" Cluster "9" EigenvectorCentrality "0.0143" ] node [ id 77 label "tengkorak" graphics [ x 310.1821 y -45.8293 w 4.1219 fill "#df89ff" ] frequency "1045" Cluster "0" EigenvectorCentrality "0.1946" ] node [ id 78 label "muak" graphics [ x 108.0973 y 285.9027 w 4.1200 fill "#00c4ff" ] frequency "1037" Cluster "2" EigenvectorCentrality "0.0820" ] node [ id 80 label "aparat" graphics [ x -201.2574 y 88.2135 w 4.1182 fill "#ff8805" ] frequency "1029" Cluster "4" EigenvectorCentrality "0.0446" ] node [ id 84 label "pengibaran" graphics [ x 90.0463 y -231.9024 w 4.1059 fill "#ff5584" ] frequency "976" Cluster "5" EigenvectorCentrality "0.1654" ] node [ id 85 label "kartun" graphics [ x 421.5589 y 23.8002 w 4.1022 fill "#df89ff" ] frequency "960" Cluster "0" EigenvectorCentrality "0.3868" ] node [ id 86 label "makan" graphics [ x -418.9264 y -81.6875 w 4.1008 fill "#73c000" ] frequency "954" Cluster "1" EigenvectorCentrality "0.1956" ] node [ id 88 label "perampasan" graphics [ x -404.7001 y -210.5002 w 4.0931 fill "#73c000" ] frequency "921" Cluster "1" EigenvectorCentrality "0.3747" ] node [ id 89 label "bersatu" graphics [ x 27.9067 y 22.7732 w 4.0929 fill "#00c4ff" ] frequency "920" Cluster "2" EigenvectorCentrality "0.0487" ] node [ id 90 label "kebebasan" graphics [ x 134.2377 y 207.8690 w 4.0924 fill "#00c4ff" ] frequency "918" Cluster "2" EigenvectorCentrality "0.0595" ] node [ id 92 label "cari" graphics [ x -489.2818 y -31.8700 w 4.0910 fill "#73c000" ] frequency "912" Cluster "1" EigenvectorCentrality "0.0098" ] node [ id 93 label "ri" graphics [ x 165.2474 y -297.5732 w 4.0898 fill "#4c463e" ] frequency "907" Cluster "3" EigenvectorCentrality "0.1335" ] node [ id 96 label "jokowi" graphics [ x -205.2011 y 498.1349 w 4.0845 fill "#00bd94" ] frequency "884" Cluster "6" EigenvectorCentrality "0.0040" ] node [ id 97 label "perlawanan" graphics [ x 138.5763 y 145.4614 w 4.0833 fill "#00c4ff" ] frequency "879" Cluster "2" EigenvectorCentrality "0.3079" ] node [ id 98 label "ketidak-adilan" graphics [ x 117.5542 y 103.8805 w 4.0817 fill "#00c4ff" ] frequency "872" Cluster "2" EigenvectorCentrality "0.1872" ] node [ id 99 label "anggota" graphics [ x -130.9968 y 279.2038 w 4.0799 fill "#00bd94" ] frequency "864" Cluster "6" EigenvectorCentrality "0.0646" ] node [ id 101 label "rekening" graphics [ x -436.8552 y -223.0153 w 4.0747 fill "#73c000" ] frequency "842" Cluster "1" EigenvectorCentrality "0.9303" ] node [ id 102 label "ekspresi" graphics [ x 169.4237 y 168.5074 w 4.0722 fill "#00c4ff" ] frequency "831" Cluster "2" EigenvectorCentrality "0.3299" ] node [ id 103 label "demokrasi" graphics [ x 165.5955 y 265.0486 w 4.0710 fill "#00c4ff" ] frequency "826" Cluster "2" EigenvectorCentrality "0.0981" ] node [ id 106 label "malu" graphics [ x 395.5437 y 180.4715 w 4.0703 fill "#df89ff" ] frequency "823" Cluster "0" EigenvectorCentrality "0.0605" ] node [ id 108 label "pemecah-belah" graphics [ x -119.0933 y -87.1089 w 4.0680 fill "#d3b3b0" ] frequency "813" Cluster "7" EigenvectorCentrality "0.1215" ] node [ id 110 label "bendera_anime" graphics [ x 352.7213 y 14.4340 w 4.0673 fill "#df89ff" ] frequency "810" Cluster "0" EigenvectorCentrality "0.4982" ] node [ id 111 label "pejuang" graphics [ x 181.9232 y -246.6355 w 4.0617 fill "#4c463e" ] frequency "786" Cluster "3" EigenvectorCentrality "0.2529" ] node [ id 112 label "kocak" graphics [ x 351.2427 y 49.3469 w 4.0615 fill "#df89ff" ] frequency "785" Cluster "0" EigenvectorCentrality "0.3039" ] node [ id 113 label "anti" graphics [ x 241.7439 y 216.8677 w 4.0597 fill "#00c4ff" ] frequency "777" Cluster "2" EigenvectorCentrality "0.0886" ] node [ id 114 label "aneh" graphics [ x 455.7940 y -0.7464 w 4.0585 fill "#df89ff" ] frequency "772" Cluster "0" EigenvectorCentrality "0.1697" ] node [ id 115 label "luffy" graphics [ x 446.7184 y -81.3262 w 4.0583 fill "#df89ff" ] frequency "771" Cluster "0" EigenvectorCentrality "0.2026" ] node [ id 116 label "tangkap" graphics [ x -312.6926 y -34.3755 w 4.0571 fill "#73c000" ] frequency "766" Cluster "1" EigenvectorCentrality "0.1064" ] node [ id 117 label "pecah-belah" graphics [ x 23.1944 y -17.7275 w 4.0552 fill "#d3b3b0" ] frequency "758" Cluster "7" EigenvectorCentrality "0.1483" ] node [ id 119 label "perjuangan" graphics [ x 170.5948 y -197.4425 w 4.0550 fill "#4c463e" ] frequency "757" Cluster "3" EigenvectorCentrality "0.1724" ] node [ id 120 label "dikritik" graphics [ x 281.7220 y 183.5975 w 4.0543 fill "#df89ff" ] frequency "754" Cluster "0" EigenvectorCentrality "0.2637" ] node [ id 122 label "dibebaskan" graphics [ x -392.0117 y -106.0606 w 4.0499 fill "#73c000" ] frequency "735" Cluster "1" EigenvectorCentrality "0.8599" ] node [ id 123 label "menteri" graphics [ x -136.8965 y 354.4075 w 4.0480 fill "#00bd94" ] frequency "727" Cluster "6" EigenvectorCentrality "0.0319" ] node [ id 125 label "dijajah" graphics [ x 67.3274 y -110.3535 w 4.0462 fill "#4c463e" ] frequency "719" Cluster "3" EigenvectorCentrality "0.0261" ] node [ id 126 label "elit" graphics [ x -147.9705 y 88.3895 w 4.0450 fill "#ff8805" ] frequency "714" Cluster "4" EigenvectorCentrality "0.0620" ] node [ id 128 label "miskin" graphics [ x -505.9775 y -120.2503 w 4.0432 fill "#73c000" ] frequency "706" Cluster "1" EigenvectorCentrality "0.2280" ] node [ id 129 label "mengerti" graphics [ x 511.2495 y 75.2982 w 4.0422 fill "#df89ff" ] frequency "702" Cluster "0" EigenvectorCentrality "0.0459" ] node [ id 130 label "nonton" graphics [ x 468.0849 y 36.3685 w 4.0413 fill "#df89ff" ] frequency "698" Cluster "0" EigenvectorCentrality "0.1296" ] node [ id 131 label "mikir" graphics [ x 331.8471 y 187.7099 w 4.0411 fill "#df89ff" ] frequency "697" Cluster "0" EigenvectorCentrality "0.1806" ] node [ id 133 label "maling" graphics [ x -306.1070 y -108.0992 w 4.0399 fill "#73c000" ] frequency "692" Cluster "1" EigenvectorCentrality "0.6381" ] node [ id 134 label "panik" graphics [ x 373.4666 y 80.9048 w 4.0367 fill "#df89ff" ] frequency "678" Cluster "0" EigenvectorCentrality "0.2147" ] node [ id 135 label "nganggur" graphics [ x -526.0787 y -80.3517 w 4.0364 fill "#73c000" ] frequency "677" Cluster "1" EigenvectorCentrality "0.6331" ] node [ id 136 label "tegas" graphics [ x -354.2039 y -72.8479 w 4.0318 fill "#73c000" ] frequency "657" Cluster "1" EigenvectorCentrality "0.2670" ] node [ id 137 label "lawan" graphics [ x 35.3768 y 64.7746 w 4.0315 fill "#00c4ff" ] frequency "656" Cluster "2" EigenvectorCentrality "0.0331" ] node [ id 138 label "jolly_roger" graphics [ x 387.8297 y -81.9942 w 4.0304 fill "#df89ff" ] frequency "651" Cluster "0" EigenvectorCentrality "0.4131" ] node [ id 139 label "sistem" graphics [ x -241.9220 y 195.8163 w 4.0299 fill "#ff8805" ] frequency "649" Cluster "4" EigenvectorCentrality "0.0192" ] node [ id 141 label "duit" graphics [ x -456.511 y -97.8584 w 4.0285 fill "#73c000" ] frequency "643" Cluster "1" EigenvectorCentrality "0.6453" ] node [ id 144 label "terlalu_suci" graphics [ x -21.1492 y -114.4039 w 4.0250 fill "#ff5584" ] frequency "628" Cluster "5" EigenvectorCentrality "0.0826" ] node [ id 145 label "amnesti" graphics [ x -342.3179 y -165.2382 w 4.0243 fill "#73c000" ] frequency "625" Cluster "1" EigenvectorCentrality "0.2129" ] node [ id 146 label "pengkhianat" graphics [ x -172.5720 y -94.5022 w 4.0241 fill "#73c000" ] frequency "624" Cluster "1" EigenvectorCentrality "0.1973" ] node [ id 148 label "otak" graphics [ x 356.6959 y 220.8199 w 4.0239 fill "#df89ff" ] frequency "623" Cluster "0" EigenvectorCentrality "0.0314" ] node [ id 149 label "lucu" graphics [ x 386.6655 y 33.1206 w 4.0223 fill "#df89ff" ] frequency "616" Cluster "0" EigenvectorCentrality "0.1697" ] node [ id 150 label "cerita" graphics [ x 461.5602 y -47.7216 w 4.0223 fill "#df89ff" ] frequency "616" Cluster "0" EigenvectorCentrality "0.2851" ] node [ id 151 label "mantap" graphics [ x 37.9947 y -234.2646 w 4.0216 fill "#ff5584" ] frequency "613" Cluster "5" EigenvectorCentrality "0.0334" ] node [ id 152 label "kotor" graphics [ x -80.7581 y -17.3773 w 4.0199 fill "#ff5584" ] frequency "606" Cluster "5" EigenvectorCentrality "0.1290" ] node [ id 153 label "gambar" graphics [ x 352.9849 y -36.4815 w 4.0197 fill "#df89ff" ] frequency "605" Cluster "0" EigenvectorCentrality "0.3071" ] node [ id 156 label "lebay" graphics [ x 340.5191 y 92.3487 w 4.0188 fill "#df89ff" ] frequency "601" Cluster "0" EigenvectorCentrality "0.3765" ] node [ id 157 label "beli" graphics [ x -183.4511 y -156.0389 w 4.0183 fill "#ff5584" ] frequency "599" Cluster "5" EigenvectorCentrality "0.0596" ] node [ id 158 label "aspirasi" graphics [ x 79.3060 y 255.9101 w 4.0169 fill "#00c4ff" ] frequency "593" Cluster "2" EigenvectorCentrality "0.1705" ] node [ id 160 label "disita" graphics [ x -399.6584 y -161.3390 w 4.0155 fill "#73c000" ] frequency "587" Cluster "1" EigenvectorCentrality "1.0" ] node [ id 161 label "demo" graphics [ x 39.2177 y 195.2315 w 4.0141 fill "#ff8805" ] frequency "581" Cluster "4" EigenvectorCentrality "0.0590" ] node [ id 162 label "persatuan" graphics [ x -4.8786 y 4.8310 w 4.0134 fill "#d3b3b0" ] frequency "578" Cluster "7" EigenvectorCentrality "0.0903" ] node [ id 163 label "darah" graphics [ x 242.8740 y -225.4979 w 4.0127 fill "#4c463e" ] frequency "575" Cluster "3" EigenvectorCentrality "0.2203" ] node [ id 164 label "polisi" graphics [ x -269.2895 y -0.8611 w 4.0125 fill "#73c000" ] frequency "574" Cluster "1" EigenvectorCentrality "0.0812" ] node [ id 165 label "sok" graphics [ x 409.936 y 96.2754 w 4.0123 fill "#df89ff" ] frequency "573" Cluster "0" EigenvectorCentrality "0.0702" ] node [ id 166 label "pejabatnya" graphics [ x -108.9772 y 220.8457 w 4.0123 fill "#ff8805" ] frequency "573" Cluster "4" EigenvectorCentrality "0.0648" ] node [ id 168 label "dihukum" graphics [ x -348.8129 y -127.5127 w 4.0120 fill "#73c000" ] frequency "572" Cluster "1" EigenvectorCentrality "0.7221" ] node [ id 169 label "turun" graphics [ x -53.7840 y 164.7478 w 4.0120 fill "#ff8805" ] frequency "572" Cluster "4" EigenvectorCentrality "0.0164" ] node [ id 170 label "penjajah" graphics [ x 26.5309 y -95.7544 w 4.0113 fill "#4c463e" ] frequency "569" Cluster "3" EigenvectorCentrality "0.0883" ] node [ id 171 label "agustus" graphics [ x 134.1449 y -246.0175 w 4.0104 fill "#4c463e" ] frequency "565" Cluster "3" EigenvectorCentrality "0.2744" ] node [ id 172 label "tiang" graphics [ x 182.3608 y -154.4817 w 4.0099 fill "#4c463e" ] frequency "563" Cluster "3" EigenvectorCentrality "0.2837" ] node [ id 174 label "pidana" graphics [ x -207.0120 y -116.2935 w 4.0097 fill "#d3b3b0" ] frequency "562" Cluster "7" EigenvectorCentrality "0.1221" ] node [ id 177 label "bawah" graphics [ x -122.9493 y 132.7647 w 4.0065 fill "#ff8805" ] frequency "548" Cluster "4" EigenvectorCentrality "0.0157" ] node [ id 178 label "bodoh" graphics [ x 406.5866 y 145.8056 w 4.0058 fill "#df89ff" ] frequency "545" Cluster "0" EigenvectorCentrality "0.0774" ] node [ id 179 label "peduli" graphics [ x 502.1463 y 147.3563 w 4.0055 fill "#df89ff" ] frequency "544" Cluster "0" EigenvectorCentrality "0.0292" ] node [ id 180 label "17_agustus" graphics [ x 180.8891 y -335.0535 w 4.0055 fill "#4c463e" ] frequency "544" Cluster "3" EigenvectorCentrality "0.2230" ] node [ id 181 label "hitam" graphics [ x 298.2737 y -128.4331 w 4.0048 fill "#df89ff" ] frequency "541" Cluster "0" EigenvectorCentrality "0.1425" ] node [ id 182 label "merugikan" graphics [ x -437.3417 y -261.3950 w 4.0034 fill "#c0c0c0" ] frequency "535" Cluster "9" EigenvectorCentrality "0.0767" ] node [ id 183 label "ditangkap" graphics [ x -297.6949 y -70.3455 w 4.0032 fill "#73c000" ] frequency "534" Cluster "1" EigenvectorCentrality "0.3659" ] node [ id 184 label "hukuman" graphics [ x -320.9066 y -196.8332 w 4.0023 fill "#73c000" ] frequency "530" Cluster "1" EigenvectorCentrality "0.6949" ] node [ id 186 label "dibiarkan" graphics [ x -427.4893 y -183.6578 w 4.0013 fill "#73c000" ] frequency "526" Cluster "1" EigenvectorCentrality "0.3966" ] node [ id 187 label "milik" graphics [ x -552.6946 y -181.2984 w 4.0011 fill "#73c000" ] frequency "525" Cluster "1" EigenvectorCentrality "0.5297" ] node [ id 188 label "diblokir" graphics [ x -476.6347 y -150.6658 w 4.0009 fill "#73c000" ] frequency "524" Cluster "1" EigenvectorCentrality "0.8662" ] node [ id 190 label "dewan" graphics [ x -84.7298 y 346.2738 w 4.0002 fill "#00bd94" ] frequency "521" Cluster "6" EigenvectorCentrality "0.0439" ] node [ id 191 label "pintar" graphics [ x 469.6844 y 123.5082 w 4.0 fill "#df89ff" ] frequency "520" Cluster "0" EigenvectorCentrality "0.0381" ] edge [ id 14324 source 0 target 13 label "0.6375" value 0.6375 fill "#000000" frequency "249" association "8.0327" similarity "0.6375" ] edge [ id 14349 source 0 target 55 label "0.6403" value 0.6403 fill "#000000" frequency "150" association "7.4666" similarity "0.6403" ] edge [ id 14350 source 0 target 37 label "0.6855" value 0.6855 fill "#000000" frequency "286" association "8.3759" similarity "0.6855" ] edge [ id 14408 source 0 target 70 label "0.483" value 0.483 fill "#000000" frequency "70" association "6.3856" similarity "0.483" ] edge [ id 14462 source 1 target 16 label "0.4685" value 0.4685 fill "#000000" frequency "5564" association "13.0445" similarity "0.4685" ] edge [ id 14482 source 1 target 153 label "0.545" value 0.545 fill "#000000" frequency "511" association "9.8119" similarity "0.545" ] edge [ id 14487 source 1 target 15 label "0.4981" value 0.4981 fill "#000000" frequency "1146" association "10.7449" similarity "0.4981" ] edge [ id 14488 source 1 target 181 label "0.461" value 0.461 fill "#000000" frequency "768" association "10.4047" similarity "0.461" ] edge [ id 14490 source 1 target 6 label "0.5369" value 0.5369 fill "#000000" frequency "1388" association "10.7438" similarity "0.5369" ] edge [ id 14492 source 1 target 138 label "0.4848" value 0.4848 fill "#000000" frequency "881" association "10.5942" similarity "0.4848" ] edge [ id 14512 source 1 target 68 label "0.4814" value 0.4814 fill "#000000" frequency "843" association "10.4953" similarity "0.4814" ] edge [ id 14515 source 1 target 110 label "0.5973" value 0.5973 fill "#000000" frequency "102" association "7.4714" similarity "0.5973" ] edge [ id 14879 source 3 target 63 label "0.4697" value 0.4697 fill "#000000" frequency "102" association "7.7708" similarity "0.4697" ] edge [ id 14919 source 3 target 21 label "0.615" value 0.615 fill "#000000" frequency "106" association "7.677" similarity "0.615" ] edge [ id 15000 source 3 target 166 label "0.483" value 0.483 fill "#000000" frequency "48" association "6.7436" similarity "0.483" ] edge [ id 15158 source 4 target 44 label "0.5291" value 0.5291 fill "#000000" frequency "151" association "8.5973" similarity "0.5291" ] edge [ id 15188 source 4 target 93 label "0.4703" value 0.4703 fill "#000000" frequency "78" association "7.7317" similarity "0.4703" ] edge [ id 15219 source 5 target 184 label "0.488" value 0.488 fill "#000000" frequency "427" association "10.3175" similarity "0.488" ] edge [ id 15245 source 5 target 122 label "0.4968" value 0.4968 fill "#000000" frequency "1024" association "11.5527" similarity "0.4968" ] edge [ id 15246 source 5 target 133 label "0.5724" value 0.5724 fill "#000000" frequency "280" association "9.6875" similarity "0.5724" ] edge [ id 15251 source 5 target 168 label "0.4679" value 0.4679 fill "#000000" frequency "597" association "10.7955" similarity "0.4679" ] edge [ id 15254 source 5 target 146 label "0.4542" value 0.4542 fill "#000000" frequency "280" association "9.6963" similarity "0.4542" ] edge [ id 15287 source 5 target 11 label "0.5318" value 0.5318 fill "#000000" frequency "405" association "9.7637" similarity "0.5318" ] edge [ id 15301 source 5 target 24 label "0.5552" value 0.5552 fill "#000000" frequency "112" association "8.15" similarity "0.5552" ] edge [ id 15403 source 6 target 138 label "0.599" value 0.599 fill "#000000" frequency "74" association "8.0499" similarity "0.599" ] edge [ id 15445 source 6 target 15 label "0.4575" value 0.4575 fill "#000000" frequency "732" association "10.9227" similarity "0.4575" ] edge [ id 15478 source 6 target 77 label "0.4804" value 0.4804 fill "#000000" frequency "55" association "7.561" similarity "0.4804" ] edge [ id 15480 source 6 target 8 label "0.4911" value 0.4911 fill "#000000" frequency "151" association "8.3318" similarity "0.4911" ] edge [ id 15491 source 6 target 110 label "0.6017" value 0.6017 fill "#000000" frequency "11" association "5.275" similarity "0.6017" ] edge [ id 15594 source 7 target 24 label "0.4902" value 0.4902 fill "#000000" frequency "2411" association "12.8147" similarity "0.4902" ] edge [ id 15621 source 7 target 60 label "0.4548" value 0.4548 fill "#000000" frequency "194" association "9.3512" similarity "0.4548" ] edge [ id 15624 source 7 target 126 label "0.4891" value 0.4891 fill "#000000" frequency "221" association "9.6213" similarity "0.4891" ] edge [ id 15630 source 7 target 99 label "0.4861" value 0.4861 fill "#000000" frequency "136" association "8.8975" similarity "0.4861" ] edge [ id 15648 source 7 target 80 label "0.4963" value 0.4963 fill "#000000" frequency "482" association "10.6977" similarity "0.4963" ] edge [ id 15676 source 7 target 63 label "0.5" value 0.5 fill "#000000" frequency "221" association "9.5471" similarity "0.5" ] edge [ id 15727 source 7 target 166 label "0.687" value 0.687 fill "#000000" frequency "64" association "7.8557" similarity "0.687" ] edge [ id 15770 source 8 target 59 label "0.6042" value 0.6042 fill "#000000" frequency "1146" association "12.1589" similarity "0.6042" ] edge [ id 15771 source 8 target 150 label "0.497" value 0.497 fill "#000000" frequency "938" association "12.0058" similarity "0.497" ] edge [ id 15784 source 8 target 138 label "0.5437" value 0.5437 fill "#000000" frequency "255" association "10.1199" similarity "0.5437" ] edge [ id 15790 source 8 target 27 label "0.4716" value 0.4716 fill "#000000" frequency "532" association "10.9027" similarity "0.4716" ] edge [ id 15796 source 8 target 85 label "0.4851" value 0.4851 fill "#000000" frequency "261" association "10.0953" similarity "0.4851" ] edge [ id 15955 source 9 target 20 label "0.4807" value 0.4807 fill "#000000" frequency "3579" association "13.8191" similarity "0.4807" ] edge [ id 15969 source 9 target 162 label "0.5835" value 0.5835 fill "#000000" frequency "468" association "11.3643" similarity "0.5835" ] edge [ id 16147 source 10 target 99 label "0.5555" value 0.5555 fill "#000000" frequency "1277" association "12.8182" similarity "0.5555" ] edge [ id 16153 source 10 target 190 label "0.6974" value 0.6974 fill "#000000" frequency "206" association "10.2742" similarity "0.6974" ] edge [ id 16345 source 11 target 133 label "0.5171" value 0.5171 fill "#000000" frequency "102" association "9.2412" similarity "0.5171" ] edge [ id 16358 source 11 target 24 label "0.6141" value 0.6141 fill "#000000" frequency "119" association "9.058" similarity "0.6141" ] edge [ id 16480 source 12 target 50 label "0.4747" value 0.4747 fill "#000000" frequency "179" association "9.8449" similarity "0.4747" ] edge [ id 16507 source 12 target 163 label "0.4999" value 0.4999 fill "#000000" frequency "111" association "9.3951" similarity "0.4999" ] edge [ id 16511 source 12 target 15 label "0.8208" value 0.8208 fill "#000000" frequency "155" association "9.1918" similarity "0.8208" ] edge [ id 16525 source 12 target 111 label "0.4767" value 0.4767 fill "#000000" frequency "123" association "9.488" similarity "0.4767" ] edge [ id 16526 source 12 target 172 label "0.4984" value 0.4984 fill "#000000" frequency "314" association "10.8986" similarity "0.4984" ] edge [ id 16663 source 13 target 71 label "0.4605" value 0.4605 fill "#000000" frequency "541" association "11.5569" similarity "0.4605" ] edge [ id 16730 source 13 target 70 label "0.5615" value 0.5615 fill "#000000" frequency "106" association "9.2029" similarity "0.5615" ] edge [ id 16787 source 13 target 55 label "0.5234" value 0.5234 fill "#000000" frequency "9" association "5.5607" similarity "0.5234" ] edge [ id 16815 source 13 target 37 label "0.5026" value 0.5026 fill "#000000" frequency "12" association "5.8811" similarity "0.5026" ] edge [ id 17008 source 15 target 163 label "0.4965" value 0.4965 fill "#000000" frequency "58" association "8.7439" similarity "0.4965" ] edge [ id 17016 source 15 target 45 label "0.5573" value 0.5573 fill "#000000" frequency "671" association "11.9613" similarity "0.5573" ] edge [ id 17026 source 15 target 50 label "0.4678" value 0.4678 fill "#000000" frequency "101" association "9.2571" similarity "0.4678" ] edge [ id 17044 source 15 target 172 label "0.5857" value 0.5857 fill "#000000" frequency "318" association "11.2027" similarity "0.5857" ] edge [ id 17053 source 15 target 180 label "0.4562" value 0.4562 fill "#000000" frequency "65" association "8.9184" similarity "0.4562" ] edge [ id 17060 source 15 target 111 label "0.4735" value 0.4735 fill "#000000" frequency "82" association "9.1764" similarity "0.4735" ] edge [ id 17077 source 15 target 171 label "0.4731" value 0.4731 fill "#000000" frequency "90" association "9.381" similarity "0.4731" ] edge [ id 17233 source 16 target 45 label "0.5739" value 0.5739 fill "#000000" frequency "29" association "7.5104" similarity "0.5739" ] edge [ id 17277 source 16 target 30 label "0.6158" value 0.6158 fill "#000000" frequency "11" association "5.9967" similarity "0.6158" ] edge [ id 17282 source 16 target 41 label "0.6954" value 0.6954 fill "#000000" frequency "11" association "6.1" similarity "0.6954" ] edge [ id 17290 source 16 target 38 label "0.528" value 0.528 fill "#000000" frequency "19" association "6.8599" similarity "0.528" ] edge [ id 17297 source 16 target 84 label "0.6259" value 0.6259 fill "#000000" frequency "6" association "5.439" similarity "0.6259" ] edge [ id 17335 source 17 target 152 label "0.4528" value 0.4528 fill "#000000" frequency "163" association "10.3866" similarity "0.4528" ] edge [ id 17552 source 18 target 184 label "0.4584" value 0.4584 fill "#000000" frequency "30" association "7.9869" similarity "0.4584" ] edge [ id 17590 source 18 target 168 label "0.4615" value 0.4615 fill "#000000" frequency "39" association "8.3499" similarity "0.4615" ] edge [ id 17670 source 19 target 125 label "0.5684" value 0.5684 fill "#000000" frequency "342" association "11.5638" similarity "0.5684" ] edge [ id 17699 source 19 target 25 label "0.5458" value 0.5458 fill "#000000" frequency "109" association "9.3612" similarity "0.5458" ] edge [ id 17831 source 20 target 162 label "0.5396" value 0.5396 fill "#000000" frequency "353" association "11.7099" similarity "0.5396" ] edge [ id 17850 source 20 target 33 label "0.5159" value 0.5159 fill "#000000" frequency "161" association "10.0762" similarity "0.5159" ] edge [ id 17901 source 20 target 108 label "0.7643" value 0.7643 fill "#000000" frequency "19" association "7.3993" similarity "0.7643" ] edge [ id 17920 source 20 target 117 label "0.7904" value 0.7904 fill "#000000" frequency "15" association "7.0799" similarity "0.7904" ] edge [ id 17988 source 21 target 139 label "0.4856" value 0.4856 fill "#000000" frequency "338" association "11.6207" similarity "0.4856" ] edge [ id 18155 source 22 target 96 label "0.6002" value 0.6002 fill "#000000" frequency "160" association "10.5226" similarity "0.6002" ] edge [ id 18158 source 22 target 26 label "0.5795" value 0.5795 fill "#000000" frequency "914" association "12.536" similarity "0.5795" ] edge [ id 18323 source 23 target 68 label "0.7666" value 0.7666 fill "#000000" frequency "107" association "9.9213" similarity "0.7666" ] edge [ id 18324 source 23 target 97 label "0.5266" value 0.5266 fill "#000000" frequency "944" association "13.159" similarity "0.5266" ] edge [ id 18360 source 23 target 32 label "0.5936" value 0.5936 fill "#000000" frequency "136" association "9.9349" similarity "0.5936" ] edge [ id 18369 source 23 target 102 label "0.4671" value 0.4671 fill "#000000" frequency "103" association "9.9835" similarity "0.4671" ] edge [ id 18548 source 24 target 133 label "0.4912" value 0.4912 fill "#000000" frequency "46" association "8.8901" similarity "0.4912" ] edge [ id 18566 source 24 target 152 label "0.5002" value 0.5002 fill "#000000" frequency "73" association "9.596" similarity "0.5002" ] edge [ id 18622 source 25 target 171 label "0.5107" value 0.5107 fill "#000000" frequency "89" association "9.9187" similarity "0.5107" ] edge [ id 18623 source 25 target 180 label "0.6032" value 0.6032 fill "#000000" frequency "147" association "10.6528" similarity "0.6032" ] edge [ id 18624 source 25 target 50 label "0.4885" value 0.4885 fill "#000000" frequency "332" association "11.4096" similarity "0.4885" ] edge [ id 18627 source 25 target 119 label "0.4982" value 0.4982 fill "#000000" frequency "147" association "10.5536" similarity "0.4982" ] edge [ id 18632 source 25 target 111 label "0.499" value 0.499 fill "#000000" frequency "444" association "12.1353" similarity "0.499" ] edge [ id 18636 source 25 target 93 label "0.4948" value 0.4948 fill "#000000" frequency "624" association "12.5733" similarity "0.4948" ] edge [ id 18772 source 26 target 123 label "0.4717" value 0.4717 fill "#000000" frequency "121" association "10.3255" similarity "0.4717" ] edge [ id 18927 source 27 target 138 label "0.5869" value 0.5869 fill "#000000" frequency "140" association "10.6279" similarity "0.5869" ] edge [ id 18939 source 27 target 153 label "0.458" value 0.458 fill "#000000" frequency "67" association "9.5878" similarity "0.458" ] edge [ id 18944 source 27 target 77 label "0.5236" value 0.5236 fill "#000000" frequency "119" association "10.2096" similarity "0.5236" ] edge [ id 18951 source 27 target 115 label "0.4933" value 0.4933 fill "#000000" frequency "129" association "10.4514" similarity "0.4933" ] edge [ id 19077 source 28 target 43 label "0.6119" value 0.6119 fill "#000000" frequency "116" association "9.947" similarity "0.6119" ] edge [ id 19079 source 28 target 113 label "0.4888" value 0.4888 fill "#000000" frequency "1159" association "13.6473" similarity "0.4888" ] edge [ id 19097 source 28 target 103 label "0.4978" value 0.4978 fill "#000000" frequency "88" association "9.9044" similarity "0.4978" ] edge [ id 19102 source 28 target 120 label "0.5976" value 0.5976 fill "#000000" frequency "56" association "9.2872" similarity "0.5976" ] edge [ id 19110 source 28 target 71 label "0.4912" value 0.4912 fill "#000000" frequency "109" association "10.0984" similarity "0.4912" ] edge [ id 19144 source 28 target 158 label "0.507" value 0.507 fill "#000000" frequency "196" association "11.1759" similarity "0.507" ] edge [ id 19152 source 28 target 102 label "0.5852" value 0.5852 fill "#000000" frequency "105" association "10.1568" similarity "0.5852" ] edge [ id 19228 source 29 target 182 label "0.4754" value 0.4754 fill "#000000" frequency "220" association "11.3746" similarity "0.4754" ] edge [ id 19254 source 29 target 56 label "0.6255" value 0.6255 fill "#000000" frequency "399" association "11.8297" similarity "0.6255" ] edge [ id 19414 source 30 target 45 label "0.5495" value 0.5495 fill "#000000" frequency "11" association "6.5887" similarity "0.5495" ] edge [ id 19418 source 30 target 151 label "0.4543" value 0.4543 fill "#000000" frequency "15" association "7.5071" similarity "0.4543" ] edge [ id 19463 source 30 target 38 label "0.5564" value 0.5564 fill "#000000" frequency "4" association "5.0733" similarity "0.5564" ] edge [ id 19474 source 30 target 84 label "0.4712" value 0.4712 fill "#000000" frequency "2" association "4.4183" similarity "0.4712" ] edge [ id 19489 source 30 target 41 label "0.7512" value 0.7512 fill "#000000" frequency "7" association "5.9201" similarity "0.7512" ] edge [ id 19668 source 32 target 71 label "0.6265" value 0.6265 fill "#000000" frequency "1146" association "13.5528" similarity "0.6265" ] edge [ id 19669 source 32 target 43 label "0.5269" value 0.5269 fill "#000000" frequency "1350" association "13.5384" similarity "0.5269" ] edge [ id 19672 source 32 target 102 label "0.5889" value 0.5889 fill "#000000" frequency "494" association "12.456" similarity "0.5889" ] edge [ id 19673 source 32 target 98 label "0.4697" value 0.4697 fill "#000000" frequency "115" association "10.3327" similarity "0.4697" ] edge [ id 19687 source 32 target 97 label "0.5386" value 0.5386 fill "#000000" frequency "461" association "12.3324" similarity "0.5386" ] edge [ id 19817 source 33 target 117 label "0.5137" value 0.5137 fill "#000000" frequency "48" association "9.1493" similarity "0.5137" ] edge [ id 19829 source 33 target 108 label "0.5981" value 0.5981 fill "#000000" frequency "61" association "9.4667" similarity "0.5981" ] edge [ id 19836 source 33 target 183 label "0.4707" value 0.4707 fill "#000000" frequency "9" association "6.8559" similarity "0.4707" ] edge [ id 19856 source 33 target 174 label "0.4831" value 0.4831 fill "#000000" frequency "9" association "6.8401" similarity "0.4831" ] edge [ id 20234 source 36 target 101 label "0.4756" value 0.4756 fill "#000000" frequency "132" association "10.635" similarity "0.4756" ] edge [ id 20242 source 36 target 188 label "0.4633" value 0.4633 fill "#000000" frequency "96" association "10.3549" similarity "0.4633" ] edge [ id 20270 source 36 target 160 label "0.4756" value 0.4756 fill "#000000" frequency "117" association "10.603" similarity "0.4756" ] edge [ id 20409 source 37 target 166 label "0.494" value 0.494 fill "#000000" frequency "67" association "9.8158" similarity "0.494" ] edge [ id 20413 source 37 target 70 label "0.4527" value 0.4527 fill "#000000" frequency "6" association "6.0594" similarity "0.4527" ] edge [ id 20462 source 37 target 55 label "0.5396" value 0.5396 fill "#000000" frequency "11" association "6.7703" similarity "0.5396" ] edge [ id 20558 source 38 target 84 label "0.4874" value 0.4874 fill "#000000" frequency "7" association "6.3665" similarity "0.4874" ] edge [ id 20580 source 38 target 45 label "0.7323" value 0.7323 fill "#000000" frequency "7" association "6.0508" similarity "0.7323" ] edge [ id 20585 source 38 target 41 label "0.4853" value 0.4853 fill "#000000" frequency "9" association "6.3955" similarity "0.4853" ] edge [ id 20767 source 40 target 71 label "0.5548" value 0.5548 fill "#000000" frequency "14" association "7.3613" similarity "0.5548" ] edge [ id 20778 source 40 target 78 label "0.6074" value 0.6074 fill "#000000" frequency "49" association "9.1884" similarity "0.6074" ] edge [ id 20798 source 40 target 43 label "0.4973" value 0.4973 fill "#000000" frequency "52" association "8.9764" similarity "0.4973" ] edge [ id 20902 source 41 target 157 label "0.4964" value 0.4964 fill "#000000" frequency "29" association "8.6918" similarity "0.4964" ] edge [ id 20937 source 41 target 45 label "0.5454" value 0.5454 fill "#000000" frequency "4" association "5.2879" similarity "0.5454" ] edge [ id 21018 source 42 target 56 label "0.4976" value 0.4976 fill "#000000" frequency "286" association "11.5702" similarity "0.4976" ] edge [ id 21023 source 42 target 88 label "0.6014" value 0.6014 fill "#000000" frequency "1554" association "14.2625" similarity "0.6014" ] edge [ id 21024 source 42 target 61 label "0.484" value 0.484 fill "#000000" frequency "1215" association "13.7404" similarity "0.484" ] edge [ id 21027 source 42 target 184 label "0.522" value 0.522 fill "#000000" frequency "145" association "11.0766" similarity "0.522" ] edge [ id 21155 source 43 target 102 label "0.5828" value 0.5828 fill "#000000" frequency "71" association "9.8626" similarity "0.5828" ] edge [ id 21173 source 43 target 71 label "0.7133" value 0.7133 fill "#000000" frequency "79" association "9.8822" similarity "0.7133" ] edge [ id 21184 source 43 target 97 label "0.6194" value 0.6194 fill "#000000" frequency "48" association "9.2704" similarity "0.6194" ] edge [ id 21227 source 43 target 120 label "0.4627" value 0.4627 fill "#000000" frequency "6" association "6.343" similarity "0.4627" ] edge [ id 21232 source 43 target 161 label "0.4827" value 0.4827 fill "#000000" frequency "65" association "9.8873" similarity "0.4827" ] edge [ id 21312 source 44 target 93 label "0.4892" value 0.4892 fill "#000000" frequency "10" association "6.9972" similarity "0.4892" ] edge [ id 21412 source 45 target 144 label "0.5403" value 0.5403 fill "#000000" frequency "677" association "13.2457" similarity "0.5403" ] edge [ id 21417 source 45 target 152 label "0.4557" value 0.4557 fill "#000000" frequency "153" association "11.114" similarity "0.4557" ] edge [ id 21424 source 45 target 172 label "0.5328" value 0.5328 fill "#000000" frequency "80" association "10.2062" similarity "0.5328" ] edge [ id 21432 source 45 target 84 label "0.5199" value 0.5199 fill "#000000" frequency "9" association "6.808" similarity "0.5199" ] edge [ id 21434 source 45 target 171 label "0.469" value 0.469 fill "#000000" frequency "64" association "9.883" similarity "0.469" ] edge [ id 21782 source 48 target 133 label "0.4943" value 0.4943 fill "#000000" frequency "415" association "12.5485" similarity "0.4943" ] edge [ id 21783 source 48 target 86 label "0.4673" value 0.4673 fill "#000000" frequency "408" association "12.3664" similarity "0.4673" ] edge [ id 21789 source 48 target 188 label "0.4619" value 0.4619 fill "#000000" frequency "42" association "9.3548" similarity "0.4619" ] edge [ id 21796 source 48 target 101 label "0.4927" value 0.4927 fill "#000000" frequency "51" association "9.4316" similarity "0.4927" ] edge [ id 21816 source 48 target 141 label "0.7882" value 0.7882 fill "#000000" frequency "19" association "8.1309" similarity "0.7882" ] edge [ id 21837 source 48 target 160 label "0.4552" value 0.4552 fill "#000000" frequency "60" association "9.8267" similarity "0.4552" ] edge [ id 22017 source 50 target 111 label "0.8185" value 0.8185 fill "#000000" frequency "318" association "12.1224" similarity "0.8185" ] edge [ id 22018 source 50 target 163 label "0.6311" value 0.6311 fill "#000000" frequency "182" association "11.4539" similarity "0.6311" ] edge [ id 22019 source 50 target 119 label "0.671" value 0.671 fill "#000000" frequency "675" association "13.2263" similarity "0.671" ] edge [ id 22125 source 51 target 114 label "0.4733" value 0.4733 fill "#000000" frequency "51" association "9.4987" similarity "0.4733" ] edge [ id 22132 source 51 target 149 label "0.5266" value 0.5266 fill "#000000" frequency "39" association "9.2126" similarity "0.5266" ] edge [ id 22165 source 51 target 112 label "0.468" value 0.468 fill "#000000" frequency "33" association "8.8626" similarity "0.468" ] edge [ id 22252 source 52 target 90 label "0.4665" value 0.4665 fill "#000000" frequency "188" association "11.2931" similarity "0.4665" ] edge [ id 22361 source 52 target 98 label "0.5392" value 0.5392 fill "#000000" frequency "1" association "3.7658" similarity "0.5392" ] edge [ id 22742 source 56 target 182 label "0.4561" value 0.4561 fill "#000000" frequency "73" association "10.2628" similarity "0.4561" ] edge [ id 22847 source 57 target 184 label "0.4713" value 0.4713 fill "#000000" frequency "667" association "13.4657" similarity "0.4713" ] edge [ id 22850 source 57 target 168 label "0.509" value 0.509 fill "#000000" frequency "732" association "13.5688" similarity "0.509" ] edge [ id 22851 source 57 target 88 label "0.4834" value 0.4834 fill "#000000" frequency "99" association "10.4476" similarity "0.4834" ] edge [ id 22852 source 57 target 61 label "0.5599" value 0.5599 fill "#000000" frequency "203" association "11.2985" similarity "0.5599" ] edge [ id 22950 source 58 target 98 label "0.4762" value 0.4762 fill "#000000" frequency "573" association "13.0402" similarity "0.4762" ] edge [ id 22953 source 58 target 89 label "0.5622" value 0.5622 fill "#000000" frequency "365" association "12.3588" similarity "0.5622" ] edge [ id 22963 source 58 target 170 label "0.4814" value 0.4814 fill "#000000" frequency "288" association "12.2585" similarity "0.4814" ] edge [ id 22998 source 58 target 97 label "0.5131" value 0.5131 fill "#000000" frequency "25" association "8.5172" similarity "0.5131" ] edge [ id 23032 source 58 target 137 label "0.6188" value 0.6188 fill "#000000" frequency "10" association "7.3468" similarity "0.6188" ] edge [ id 23057 source 59 target 130 label "0.5234" value 0.5234 fill "#000000" frequency "268" association "12.0633" similarity "0.5234" ] edge [ id 23058 source 59 target 138 label "0.5761" value 0.5761 fill "#000000" frequency "19" association "8.2785" similarity "0.5761" ] edge [ id 23059 source 59 target 110 label "0.5202" value 0.5202 fill "#000000" frequency "31" association "8.8747" similarity "0.5202" ] edge [ id 23066 source 59 target 150 label "0.6959" value 0.6959 fill "#000000" frequency "167" association "11.4397" similarity "0.6959" ] edge [ id 23067 source 59 target 85 label "0.7271" value 0.7271 fill "#000000" frequency "190" association "11.3937" similarity "0.7271" ] edge [ id 23081 source 59 target 115 label "0.4528" value 0.4528 fill "#000000" frequency "32" association "8.9468" similarity "0.4528" ] edge [ id 23084 source 59 target 153 label "0.4804" value 0.4804 fill "#000000" frequency "46" association "9.5877" similarity "0.4804" ] edge [ id 23143 source 60 target 139 label "0.4574" value 0.4574 fill "#000000" frequency "54" association "9.8623" similarity "0.4574" ] edge [ id 23193 source 60 target 166 label "0.5432" value 0.5432 fill "#000000" frequency "21" association "8.5586" similarity "0.5432" ] edge [ id 23225 source 60 target 63 label "0.4987" value 0.4987 fill "#000000" frequency "13" association "7.4413" similarity "0.4987" ] edge [ id 23255 source 61 target 88 label "0.7926" value 0.7926 fill "#000000" frequency "2845" association "15.3974" similarity "0.7926" ] edge [ id 23257 source 61 target 184 label "0.4952" value 0.4952 fill "#000000" frequency "138" association "11.3198" similarity "0.4952" ] edge [ id 23261 source 61 target 101 label "0.523" value 0.523 fill "#000000" frequency "62" association "9.9311" similarity "0.523" ] edge [ id 23274 source 61 target 160 label "0.5034" value 0.5034 fill "#000000" frequency "164" association "11.5231" similarity "0.5034" ] edge [ id 23285 source 61 target 62 label "0.4672" value 0.4672 fill "#000000" frequency "81" association "10.0754" similarity "0.4672" ] edge [ id 23338 source 62 target 101 label "0.7367" value 0.7367 fill "#000000" frequency "704" association "13.4489" similarity "0.7367" ] edge [ id 23341 source 62 target 188 label "0.6545" value 0.6545 fill "#000000" frequency "474" association "13.1197" similarity "0.6545" ] edge [ id 23342 source 62 target 135 label "0.662" value 0.662 fill "#000000" frequency "1098" association "14.2104" similarity "0.662" ] edge [ id 23345 source 62 target 160 label "0.6412" value 0.6412 fill "#000000" frequency "586" association "13.3746" similarity "0.6412" ] edge [ id 23353 source 62 target 187 label "0.4787" value 0.4787 fill "#000000" frequency "180" association "11.722" similarity "0.4787" ] edge [ id 23472 source 63 target 126 label "0.5347" value 0.5347 fill "#000000" frequency "59" association "9.981" similarity "0.5347" ] edge [ id 23558 source 64 target 129 label "0.8266" value 0.8266 fill "#000000" frequency "25" association "8.7612" similarity "0.8266" ] edge [ id 23564 source 64 target 130 label "0.5499" value 0.5499 fill "#000000" frequency "63" association "10.0977" similarity "0.5499" ] edge [ id 23576 source 64 target 179 label "0.4596" value 0.4596 fill "#000000" frequency "8" association "7.2434" similarity "0.4596" ] edge [ id 23607 source 64 target 73 label "0.4647" value 0.4647 fill "#000000" frequency "7" association "6.6742" similarity "0.4647" ] edge [ id 23646 source 65 target 73 label "0.6953" value 0.6953 fill "#000000" frequency "54" association "9.625" similarity "0.6953" ] edge [ id 23650 source 65 target 120 label "0.5086" value 0.5086 fill "#000000" frequency "34" association "9.1693" similarity "0.5086" ] edge [ id 23654 source 65 target 131 label "0.6784" value 0.6784 fill "#000000" frequency "32" association "9.125" similarity "0.6784" ] edge [ id 23674 source 65 target 156 label "0.5149" value 0.5149 fill "#000000" frequency "18" association "8.3706" similarity "0.5149" ] edge [ id 23809 source 67 target 86 label "0.5367" value 0.5367 fill "#000000" frequency "91" association "10.4882" similarity "0.5367" ] edge [ id 23812 source 67 target 92 label "0.478" value 0.478 fill "#000000" frequency "384" association "12.5949" similarity "0.478" ] edge [ id 23813 source 67 target 72 label "0.4608" value 0.4608 fill "#000000" frequency "340" association "12.3173" similarity "0.4608" ] edge [ id 23906 source 68 target 77 label "0.5296" value 0.5296 fill "#000000" frequency "247" association "11.8729" similarity "0.5296" ] edge [ id 23926 source 68 target 153 label "0.5629" value 0.5629 fill "#000000" frequency "146" association "11.4433" similarity "0.5629" ] edge [ id 23949 source 68 target 172 label "0.469" value 0.469 fill "#000000" frequency "12" association "7.8742" similarity "0.469" ] edge [ id 24006 source 69 target 99 label "0.5511" value 0.5511 fill "#000000" frequency "24" association "8.6446" similarity "0.5511" ] edge [ id 24010 source 69 target 190 label "0.5609" value 0.5609 fill "#000000" frequency "8" association "7.3364" similarity "0.5609" ] edge [ id 24016 source 69 target 158 label "0.5329" value 0.5329 fill "#000000" frequency "37" association "9.4832" similarity "0.5329" ] edge [ id 24171 source 71 target 102 label "0.6398" value 0.6398 fill "#000000" frequency "255" association "12.098" similarity "0.6398" ] edge [ id 24174 source 71 target 98 label "0.5062" value 0.5062 fill "#000000" frequency "42" association "9.4653" similarity "0.5062" ] edge [ id 24175 source 71 target 158 label "0.4749" value 0.4749 fill "#000000" frequency "36" association "9.466" similarity "0.4749" ] edge [ id 24186 source 71 target 97 label "0.6164" value 0.6164 fill "#000000" frequency "43" association "9.4941" similarity "0.6164" ] edge [ id 24210 source 71 target 78 label "0.4738" value 0.4738 fill "#000000" frequency "4" association "5.9556" similarity "0.4738" ] edge [ id 24259 source 72 target 128 label "0.5397" value 0.5397 fill "#000000" frequency "38" association "9.4608" similarity "0.5397" ] edge [ id 24261 source 72 target 86 label "0.4988" value 0.4988 fill "#000000" frequency "202" association "11.6816" similarity "0.4988" ] edge [ id 24350 source 73 target 106 label "0.5588" value 0.5588 fill "#000000" frequency "23" association "8.6447" similarity "0.5588" ] edge [ id 24354 source 73 target 120 label "0.4924" value 0.4924 fill "#000000" frequency "31" association "9.1292" similarity "0.4924" ] edge [ id 24355 source 73 target 134 label "0.4633" value 0.4633 fill "#000000" frequency "5" association "6.5587" similarity "0.4633" ] edge [ id 24408 source 73 target 131 label "0.5525" value 0.5525 fill "#000000" frequency "6" association "6.8061" similarity "0.5525" ] edge [ id 24528 source 75 target 182 label "0.4855" value 0.4855 fill "#000000" frequency "41" association "9.7255" similarity "0.4855" ] edge [ id 24697 source 77 target 153 label "0.626" value 0.626 fill "#000000" frequency "452" association "13.1319" similarity "0.626" ] edge [ id 24713 source 77 target 181 label "0.623" value 0.623 fill "#000000" frequency "151" association "11.6072" similarity "0.623" ] edge [ id 24942 source 80 target 177 label "0.4884" value 0.4884 fill "#000000" frequency "177" association "11.8446" similarity "0.4884" ] edge [ id 24957 source 80 target 164 label "0.6388" value 0.6388 fill "#000000" frequency "20" association "8.6754" similarity "0.6388" ] edge [ id 25316 source 85 target 153 label "0.4605" value 0.4605 fill "#000000" frequency "46" association "9.9116" similarity "0.4605" ] edge [ id 25321 source 85 target 110 label "0.6821" value 0.6821 fill "#000000" frequency "22" association "8.6699" similarity "0.6821" ] edge [ id 25334 source 85 target 112 label "0.517" value 0.517 fill "#000000" frequency "40" association "9.5529" similarity "0.517" ] edge [ id 25338 source 85 target 150 label "0.4726" value 0.4726 fill "#000000" frequency "32" association "9.3779" similarity "0.4726" ] edge [ id 25345 source 85 target 156 label "0.4658" value 0.4658 fill "#000000" frequency "11" association "7.8512" similarity "0.4658" ] edge [ id 25391 source 86 target 141 label "0.569" value 0.569 fill "#000000" frequency "164" association "11.7164" similarity "0.569" ] edge [ id 25401 source 86 target 157 label "0.4672" value 0.4672 fill "#000000" frequency "33" association "9.4436" similarity "0.4672" ] edge [ id 25522 source 88 target 184 label "0.5271" value 0.5271 fill "#000000" frequency "95" association "11.067" similarity "0.5271" ] edge [ id 25525 source 88 target 101 label "0.4915" value 0.4915 fill "#000000" frequency "42" association "9.6085" similarity "0.4915" ] edge [ id 25587 source 89 target 137 label "0.5808" value 0.5808 fill "#000000" frequency "79" association "10.6817" similarity "0.5808" ] edge [ id 25590 source 89 target 162 label "0.4606" value 0.4606 fill "#000000" frequency "14" association "8.2585" similarity "0.4606" ] edge [ id 25661 source 90 target 97 label "0.4633" value 0.4633 fill "#000000" frequency "107" association "10.9301" similarity "0.4633" ] edge [ id 25854 source 93 target 180 label "0.5638" value 0.5638 fill "#000000" frequency "39" association "9.7826" similarity "0.5638" ] edge [ id 25863 source 93 target 171 label "0.5147" value 0.5147 fill "#000000" frequency "21" association "8.8688" similarity "0.5147" ] edge [ id 26105 source 97 target 98 label "0.5504" value 0.5504 fill "#000000" frequency "189" association "11.7883" similarity "0.5504" ] edge [ id 26111 source 97 target 102 label "0.4624" value 0.4624 fill "#000000" frequency "18" association "8.4301" similarity "0.4624" ] edge [ id 26223 source 99 target 123 label "0.5544" value 0.5544 fill "#000000" frequency "32" association "9.3643" similarity "0.5544" ] edge [ id 26224 source 99 target 190 label "0.7445" value 0.7445 fill "#000000" frequency "613" association "13.8241" similarity "0.7445" ] edge [ id 26346 source 101 target 135 label "0.7809" value 0.7809 fill "#000000" frequency "730" association "13.9428" similarity "0.7809" ] edge [ id 26347 source 101 target 188 label "0.8489" value 0.8489 fill "#000000" frequency "704" association "14.0437" similarity "0.8489" ] edge [ id 26349 source 101 target 160 label "0.7295" value 0.7295 fill "#000000" frequency "384" association "13.1042" similarity "0.7295" ] edge [ id 26350 source 101 target 141 label "0.4736" value 0.4736 fill "#000000" frequency "18" association "8.6337" similarity "0.4736" ] edge [ id 26352 source 101 target 187 label "0.4667" value 0.4667 fill "#000000" frequency "44" association "10.0426" similarity "0.4667" ] edge [ id 26353 source 101 target 122 label "0.4843" value 0.4843 fill "#000000" frequency "53" association "10.105" similarity "0.4843" ] edge [ id 26413 source 102 target 158 label "0.4625" value 0.4625 fill "#000000" frequency "9" association "7.6942" similarity "0.4625" ] edge [ id 26417 source 102 target 103 label "0.4552" value 0.4552 fill "#000000" frequency "38" association "9.5536" similarity "0.4552" ] edge [ id 26652 source 106 target 131 label "0.4615" value 0.4615 fill "#000000" frequency "12" association "8.0151" similarity "0.4615" ] edge [ id 26729 source 108 target 162 label "0.4989" value 0.4989 fill "#000000" frequency "88" association "11.0175" similarity "0.4989" ] edge [ id 26739 source 108 target 146 label "0.5685" value 0.5685 fill "#000000" frequency "14" association "8.3185" similarity "0.5685" ] edge [ id 26743 source 108 target 117 label "0.7295" value 0.7295 fill "#000000" frequency "8" association "7.3825" similarity "0.7295" ] edge [ id 26828 source 110 target 134 label "0.4604" value 0.4604 fill "#000000" frequency "30" association "9.3677" similarity "0.4604" ] edge [ id 26829 source 110 target 149 label "0.5072" value 0.5072 fill "#000000" frequency "17" association "8.6097" similarity "0.5072" ] edge [ id 26831 source 110 target 112 label "0.624" value 0.624 fill "#000000" frequency "49" association "9.9754" similarity "0.624" ] edge [ id 26837 source 110 target 156 label "0.5252" value 0.5252 fill "#000000" frequency "11" association "7.9969" similarity "0.5252" ] edge [ id 26840 source 110 target 114 label "0.4546" value 0.4546 fill "#000000" frequency "17" association "8.4599" similarity "0.4546" ] edge [ id 26844 source 110 target 138 label "0.5217" value 0.5217 fill "#000000" frequency "8" association "7.4873" similarity "0.5217" ] edge [ id 26879 source 111 target 163 label "0.6707" value 0.6707 fill "#000000" frequency "134" association "11.6556" similarity "0.6707" ] edge [ id 26885 source 111 target 119 label "0.679" value 0.679 fill "#000000" frequency "62" association "10.3627" similarity "0.679" ] edge [ id 26918 source 112 target 134 label "0.4579" value 0.4579 fill "#000000" frequency "14" association "8.2926" similarity "0.4579" ] edge [ id 26930 source 112 target 156 label "0.6111" value 0.6111 fill "#000000" frequency "4" association "6.5633" similarity "0.6111" ] edge [ id 26935 source 112 target 149 label "0.7505" value 0.7505 fill "#000000" frequency "7" association "7.3551" similarity "0.7505" ] edge [ id 26949 source 112 target 114 label "0.6862" value 0.6862 fill "#000000" frequency "5" association "6.7174" similarity "0.6862" ] edge [ id 26968 source 113 target 120 label "0.4576" value 0.4576 fill "#000000" frequency "29" association "9.2777" similarity "0.4576" ] edge [ id 27036 source 114 target 149 label "0.7346" value 0.7346 fill "#000000" frequency "7" association "7.3686" similarity "0.7346" ] edge [ id 27054 source 115 target 150 label "0.5134" value 0.5134 fill "#000000" frequency "93" association "11.1014" similarity "0.5134" ] edge [ id 27058 source 115 target 138 label "0.5645" value 0.5645 fill "#000000" frequency "51" association "10.1987" similarity "0.5645" ] edge [ id 27090 source 116 target 136 label "0.5265" value 0.5265 fill "#000000" frequency "48" association "10.1102" similarity "0.5265" ] edge [ id 27094 source 116 target 183 label "0.6271" value 0.6271 fill "#000000" frequency "11" association "8.1151" similarity "0.6271" ] edge [ id 27096 source 116 target 164 label "0.4763" value 0.4763 fill "#000000" frequency "57" association "10.4449" similarity "0.4763" ] edge [ id 27126 source 117 target 156 label "0.4527" value 0.4527 fill "#000000" frequency "2" association "5.5917" similarity "0.4527" ] edge [ id 27138 source 117 target 162 label "0.4816" value 0.4816 fill "#000000" frequency "8" association "7.6163" similarity "0.4816" ] edge [ id 27212 source 119 target 170 label "0.487" value 0.487 fill "#000000" frequency "36" association "9.7971" similarity "0.487" ] edge [ id 27220 source 119 target 163 label "0.6301" value 0.6301 fill "#000000" frequency "97" association "11.2205" similarity "0.6301" ] edge [ id 27243 source 120 target 131 label "0.4928" value 0.4928 fill "#000000" frequency "44" association "9.9566" similarity "0.4928" ] edge [ id 27257 source 120 target 156 label "0.458" value 0.458 fill "#000000" frequency "11" association "8.0554" similarity "0.458" ] edge [ id 27328 source 122 target 133 label "0.4937" value 0.4937 fill "#000000" frequency "48" association "10.1062" similarity "0.4937" ] edge [ id 27333 source 122 target 188 label "0.5421" value 0.5421 fill "#000000" frequency "36" association "9.8719" similarity "0.5421" ] edge [ id 27334 source 122 target 145 label "0.5645" value 0.5645 fill "#000000" frequency "30" association "9.4975" similarity "0.5645" ] edge [ id 27335 source 122 target 160 label "0.4702" value 0.4702 fill "#000000" frequency "22" association "9.0909" similarity "0.4702" ] edge [ id 27338 source 122 target 184 label "0.4903" value 0.4903 fill "#000000" frequency "29" association "9.5531" similarity "0.4903" ] edge [ id 27341 source 122 target 168 label "0.6153" value 0.6153 fill "#000000" frequency "33" association "9.6924" similarity "0.6153" ] edge [ id 27356 source 122 target 186 label "0.5284" value 0.5284 fill "#000000" frequency "9" association "7.8696" similarity "0.5284" ] edge [ id 27357 source 122 target 183 label "0.5267" value 0.5267 fill "#000000" frequency "7" association "7.4979" similarity "0.5267" ] edge [ id 27392 source 123 target 190 label "0.4586" value 0.4586 fill "#000000" frequency "18" association "8.8845" similarity "0.4586" ] edge [ id 27460 source 125 target 170 label "0.5516" value 0.5516 fill "#000000" frequency "18" association "8.839" similarity "0.5516" ] edge [ id 27507 source 126 target 152 label "0.4595" value 0.4595 fill "#000000" frequency "24" association "9.2186" similarity "0.4595" ] edge [ id 27578 source 128 target 135 label "0.4997" value 0.4997 fill "#000000" frequency "5" association "6.8883" similarity "0.4997" ] edge [ id 27596 source 128 target 160 label "0.4761" value 0.4761 fill "#000000" frequency "1" association "4.6635" similarity "0.4761" ] edge [ id 27598 source 129 target 130 label "0.5461" value 0.5461 fill "#000000" frequency "27" association "9.3037" similarity "0.5461" ] edge [ id 27607 source 129 target 191 label "0.5026" value 0.5026 fill "#000000" frequency "15" association "8.6519" similarity "0.5026" ] edge [ id 27635 source 130 target 150 label "0.4772" value 0.4772 fill "#000000" frequency "13" association "8.3407" similarity "0.4772" ] edge [ id 27650 source 131 target 156 label "0.465" value 0.465 fill "#000000" frequency "15" association "8.5648" similarity "0.465" ] edge [ id 27654 source 131 target 148 label "0.489" value 0.489 fill "#000000" frequency "73" association "10.8235" similarity "0.489" ] edge [ id 27721 source 133 target 141 label "0.6006" value 0.6006 fill "#000000" frequency "186" association "12.1565" similarity "0.6006" ] edge [ id 27723 source 133 target 184 label "0.4566" value 0.4566 fill "#000000" frequency "17" association "8.8324" similarity "0.4566" ] edge [ id 27728 source 133 target 146 label "0.5562" value 0.5562 fill "#000000" frequency "20" association "8.96" similarity "0.5562" ] edge [ id 27732 source 133 target 168 label "0.5418" value 0.5418 fill "#000000" frequency "50" association "10.3401" similarity "0.5418" ] edge [ id 27760 source 134 target 156 label "0.5432" value 0.5432 fill "#000000" frequency "3" association "6.2642" similarity "0.5432" ] edge [ id 27787 source 135 target 188 label "0.8151" value 0.8151 fill "#000000" frequency "437" association "13.5415" similarity "0.8151" ] edge [ id 27790 source 135 target 160 label "0.7929" value 0.7929 fill "#000000" frequency "676" association "14.0971" similarity "0.7929" ] edge [ id 27794 source 135 target 141 label "0.5031" value 0.5031 fill "#000000" frequency "21" association "9.026" similarity "0.5031" ] edge [ id 27799 source 135 target 187 label "0.4527" value 0.4527 fill "#000000" frequency "64" association "10.7688" similarity "0.4527" ] edge [ id 27816 source 136 target 184 label "0.46" value 0.46 fill "#000000" frequency "25" association "9.4308" similarity "0.46" ] edge [ id 27817 source 136 target 168 label "0.4635" value 0.4635 fill "#000000" frequency "12" association "8.3217" similarity "0.4635" ] edge [ id 27830 source 136 target 183 label "0.4994" value 0.4994 fill "#000000" frequency "1" association "4.782" similarity "0.4994" ] edge [ id 27894 source 138 target 150 label "0.5024" value 0.5024 fill "#000000" frequency "4" association "6.6928" similarity "0.5024" ] edge [ id 27947 source 141 target 188 label "0.4844" value 0.4844 fill "#000000" frequency "21" association "9.2037" similarity "0.4844" ] edge [ id 27964 source 141 target 160 label "0.4715" value 0.4715 fill "#000000" frequency "6" association "7.3205" similarity "0.4715" ] edge [ id 28016 source 144 target 152 label "0.7639" value 0.7639 fill "#000000" frequency "44" association "10.1903" similarity "0.7639" ] edge [ id 28039 source 145 target 184 label "0.4782" value 0.4782 fill "#000000" frequency "12" association "8.4113" similarity "0.4782" ] edge [ id 28053 source 146 target 170 label "0.5383" value 0.5383 fill "#000000" frequency "22" association "9.2391" similarity "0.5383" ] edge [ id 28176 source 153 target 181 label "0.5921" value 0.5921 fill "#000000" frequency "43" association "10.2639" similarity "0.5921" ] edge [ id 28214 source 156 target 165 label "0.4718" value 0.4718 fill "#000000" frequency "9" association "7.9727" similarity "0.4718" ] edge [ id 28216 source 156 target 178 label "0.4986" value 0.4986 fill "#000000" frequency "4" association "6.8376" similarity "0.4986" ] edge [ id 28275 source 160 target 188 label "0.828" value 0.828 fill "#000000" frequency "257" association "12.888" similarity "0.828" ] edge [ id 28276 source 160 target 187 label "0.4762" value 0.4762 fill "#000000" frequency "17" association "8.9685" similarity "0.4762" ] edge [ id 28278 source 160 target 168 label "0.5482" value 0.5482 fill "#000000" frequency "19" association "9.0693" similarity "0.5482" ] edge [ id 28289 source 161 target 169 label "0.4546" value 0.4546 fill "#000000" frequency "30" association "9.7357" similarity "0.4546" ] edge [ id 28322 source 164 target 183 label "0.5071" value 0.5071 fill "#000000" frequency "38" association "10.1342" similarity "0.5071" ] edge [ id 28338 source 165 target 191 label "0.5362" value 0.5362 fill "#000000" frequency "83" association "11.281" similarity "0.5362" ] edge [ id 28381 source 168 target 183 label "0.6202" value 0.6202 fill "#000000" frequency "22" association "9.3483" similarity "0.6202" ] edge [ id 28384 source 168 target 184 label "0.6776" value 0.6776 fill "#000000" frequency "13" association "8.5945" similarity "0.6776" ] edge [ id 28388 source 168 target 186 label "0.4699" value 0.4699 fill "#000000" frequency "2" association "5.8993" similarity "0.4699" ] edge [ id 28394 source 169 target 177 label "0.5702" value 0.5702 fill "#000000" frequency "180" association "12.3626" similarity "0.5702" ] edge [ id 28417 source 171 target 180 label "0.7395" value 0.7395 fill "#000000" frequency "10" association "8.2069" similarity "0.7395" ] edge [ id 28421 source 171 target 172 label "0.4659" value 0.4659 fill "#000000" frequency "5" association "7.1824" similarity "0.4659" ] edge [ id 28430 source 172 target 180 label "0.4622" value 0.4622 fill "#000000" frequency "13" association "8.588" similarity "0.4622" ] edge [ id 28444 source 174 target 184 label "0.6183" value 0.6183 fill "#000000" frequency "276" association "13.0158" similarity "0.6183" ] edge [ id 28480 source 178 target 179 label "0.4569" value 0.4569 fill "#000000" frequency "5" association "7.2331" similarity "0.4569" ] edge [ id 28482 source 178 target 191 label "0.5977" value 0.5977 fill "#000000" frequency "31" association "9.8976" similarity "0.5977" ] edge [ id 28500 source 182 target 186 label "0.4696" value 0.4696 fill "#000000" frequency "11" association "8.4082" similarity "0.4696" ] edge [ id 28506 source 183 target 186 label "0.5049" value 0.5049 fill "#000000" frequency "17" association "9.0376" similarity "0.5049" ] edge [ id 28517 source 186 target 188 label "0.4525" value 0.4525 fill "#000000" frequency "13" association "8.6643" similarity "0.4525" ] edge [ id 28521 source 187 target 188 label "0.4619" value 0.4619 fill "#000000" frequency "28" association "9.7726" similarity "0.4619" ] ]</script>
+<script>
+const SAMPLE_NAME="clusters in One Piece discourse-SIMILARITY.gml";
+const PALETTE=["#4e79a7","#f28e2b","#e15759","#59a14f","#b07aa1","#edc948","#76b7b2","#ff6f91","#9c755f","#7f8c99","#2ca02c","#d62728","#17becf","#bcbd22","#8c564b","#e377c2","#1f77b4","#ff7f0e","#9467bd","#aec7e8"];
+const MAX_GROUPS=40;
+let G={nodes:[],edges:[],name:"",directed:false,attrKeys:[]};
+let colorKey="", groups=[], colorOf=new Map(), hidden=new Set(), allLabels=false;
+const $=id=>document.getElementById(id);
+const cv=$('cv'), ctx=cv.getContext('2d'), tip=$('tip');
+let view={k:1,tx:0,ty:0}, W=0,H=0,DPR=1, hover=null, BASEK=1;
+let clLabels=[], clBoxes=[], clEditing=null, clHover=null, clStyle='text', clSize=17;
+
+/* ================= GML parsing ================= */
+function decodeEntities(s){
+  return s.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos);/gi,(m,e)=>{
+    const l=e.toLowerCase();
+    if(l==='amp')return'&';if(l==='lt')return'<';if(l==='gt')return'>';if(l==='quot')return'"';if(l==='apos')return"'";
+    const cp=l[1]==='x'?parseInt(l.slice(2),16):parseInt(l.slice(1),10);
+    try{return String.fromCodePoint(cp);}catch(_){return m;}});
+}
+function tokenize(text){
+  const re=/"(?:[^"\\]|\\.)*"|\[|\]|#[^\r\n]*|[^\s\[\]"]+/g, out=[]; let m;
+  while((m=re.exec(text))){const t=m[0];if(t[0]==='#')continue;out.push(t);}
+  return out;
+}
+function parseList(toks){
+  let i=0;
+  function list(){
+    const out=[];
+    while(i<toks.length){
+      const k=toks[i++];
+      if(k===']')return out;
+      if(k==='['){list();continue;} // stray bracket: skip block
+      if(i>=toks.length)break;
+      let v=toks[i++];
+      if(v==='[')v=list();
+      else if(v===']'){i--;v=null;}
+      else if(v[0]==='"')v=decodeEntities(v.slice(1,-1).replace(/\\"/g,'"'));
+      else{const n=Number(v);v=Number.isFinite(n)?n:v;}
+      out.push([k,v]);
+    }
+    return out;
+  }
+  return list();
+}
+const num=v=>{if(typeof v==='number')return v;if(typeof v==='string'&&v.trim()!==''&&isFinite(+v))return +v;return NaN;};
+const lc=s=>String(s).toLowerCase();
+
+function parseGML(text){
+  const top=parseList(tokenize(text));
+  const gEntry=top.find(([k,v])=>lc(k)==='graph'&&Array.isArray(v));
+  if(!gEntry)throw new Error('no "graph [ … ]" block was found. Is this a GML file?');
+  let directed=false; const rawNodes=[], rawEdges=[];
+  for(const [k,v] of gEntry[1]){
+    const key=lc(k);
+    if(key==='directed')directed=num(v)===1;
+    else if(key==='node'&&Array.isArray(v))rawNodes.push(v);
+    else if(key==='edge'&&Array.isArray(v))rawEdges.push(v);
+  }
+  if(!rawNodes.length)throw new Error('the file contains no nodes.');
+  const nodes=[], byId=new Map(), keySet=new Map();
+  rawNodes.forEach((v,idx)=>{
+    const n={id:undefined,label:undefined,x:NaN,y:NaN,size:NaN,fill:null,attrs:{}};
+    for(const [k,val] of v){
+      const key=lc(k);
+      if(key==='id')n.id=String(val);
+      else if(key==='label')n.label=String(val);
+      else if(key==='graphics'&&Array.isArray(val)){
+        for(const [gk,gv] of val){const g=lc(gk);
+          if(g==='x')n.x=num(gv);else if(g==='y')n.y=num(gv);
+          else if((g==='w'||g==='size'||g==='width')&&!isFinite(n.size))n.size=num(gv);
+          else if(g==='h'&&!isFinite(n.size))n.size=num(gv);
+          else if(g==='fill'&&typeof gv==='string')n.fill=gv;}
+      }else if(!Array.isArray(val)&&val!==null){
+        n.attrs[k]=val; if(!keySet.has(k))keySet.set(k,true);
+        if(key==='x'&&!isFinite(n.x))n.x=num(val); if(key==='y'&&!isFinite(n.y))n.y=num(val);
+        if(key==='size'&&!isFinite(n.size))n.size=num(val);
+      }
+    }
+    if(n.id===undefined)n.id='__n'+idx;
+    if(n.label===undefined||n.label==='')n.label=n.id;
+    if(byId.has(n.id))return; // duplicate id: keep the first
+    byId.set(n.id,n); nodes.push(n);
+  });
+  const edges=[]; let skipped=0;
+  for(const v of rawEdges){
+    let s,t,w=NaN; const o={};
+    for(const [k,val] of v){const key=lc(k);
+      if(key==='source')s=String(val);else if(key==='target')t=String(val);
+      else if(!Array.isArray(val))o[key]=val;}
+    for(const wk of ['value','weight','similarity','strength','w']){if(wk in o&&isFinite(num(o[wk]))){w=num(o[wk]);break;}}
+    const a=byId.get(s),b=byId.get(t);
+    if(!a||!b){skipped++;continue;}
+    edges.push({a,b,w:isFinite(w)?w:1});
+  }
+  return {nodes,edges,directed,attrKeys:[...keySet.keys()],skipped};
+}
+
+/* ================= preparing the graph ================= */
+function prepare(g){
+  const {nodes,edges}=g;
+  nodes.forEach(n=>{n.nb=new Set();n.deg=0;n.showLabel=false;});
+  for(const e of edges){if(e.a!==e.b){e.a.nb.add(e.b);e.b.nb.add(e.a);}e.a.deg++;e.b.deg++;}
+  const ws=edges.map(e=>e.w); const wmin=Math.min(...ws),wmax=Math.max(...ws);
+  edges.forEach(e=>e.wn=(edges.length&&wmax>wmin)?(e.w-wmin)/(wmax-wmin):.4);
+  // size: graphics size, else a "size"/"frequency"/"weight" attr, else degree
+  let sizeOf;
+  if(nodes.some(n=>isFinite(n.size)))sizeOf=n=>isFinite(n.size)?n.size:0;
+  else{
+    const k=g.attrKeys.find(a=>/^(size|frequency|freq|weight|count|degree)$/i.test(a)&&nodes.some(n=>isFinite(num(n.attrs[a]))));
+    sizeOf=k?(n=>{const v=num(n.attrs[k]);return isFinite(v)?Math.sqrt(Math.max(v,0)):0;}):(n=>Math.sqrt(n.deg));
+  }
+  const sz=nodes.map(sizeOf),smin=Math.min(...sz),smax=Math.max(...sz);
+  nodes.forEach((n,i)=>{n.sn=smax>smin?(sz[i]-smin)/(smax-smin):.3;n.rank=sz[i];});
+  const needLayout=nodes.some(n=>!isFinite(n.x)||!isFinite(n.y));
+  return needLayout;
+}
+function layout(nodes,edges){
+  // Fruchterman–Reingold with a grid for repulsion; positions in a ~1000-unit box
+  const N=nodes.length, area=1000*1000, k=Math.sqrt(area/N);
+  nodes.forEach((n,i)=>{const a=i*2.399963,r=Math.sqrt(i+.5)/Math.sqrt(N)*500;n.x=Math.cos(a)*r;n.y=Math.sin(a)*r;n.dx=0;n.dy=0;});
+  const iters=N>3000?120:N>800?220:350; let temp=120;
+  for(let it=0;it<iters;it++){
+    const cell=k*2, grid=new Map();
+    for(const n of nodes){n.dx=0;n.dy=0;const key=Math.floor(n.x/cell)+','+Math.floor(n.y/cell);(grid.get(key)||grid.set(key,[]).get(key)).push(n);}
+    for(const n of nodes){const cx=Math.floor(n.x/cell),cy=Math.floor(n.y/cell);
+      for(let gx=cx-1;gx<=cx+1;gx++)for(let gy=cy-1;gy<=cy+1;gy++){const arr=grid.get(gx+','+gy);if(!arr)continue;
+        for(const m of arr){if(m===n)continue;let dx=n.x-m.x,dy=n.y-m.y,d2=dx*dx+dy*dy;if(d2<1e-4){dx=Math.random()-.5;dy=Math.random()-.5;d2=.5;}
+          if(d2>cell*cell)continue;const f=k*k/d2;n.dx+=dx*f;n.dy+=dy*f;}}}
+    for(const e of edges){if(e.a===e.b)continue;const dx=e.a.x-e.b.x,dy=e.a.y-e.b.y,d=Math.sqrt(dx*dx+dy*dy)||.01,f=d/k*(0.6+e.wn*0.8);
+      e.a.dx-=dx*f;e.a.dy-=dy*f;e.b.dx+=dx*f;e.b.dy+=dy*f;}
+    for(const n of nodes){n.dx-=n.x*0.01;n.dy-=n.y*0.01;const d=Math.sqrt(n.dx*n.dx+n.dy*n.dy)||1,s=Math.min(d,temp)/d;n.x+=n.dx*s;n.y+=n.dy*s;}
+    temp*=0.985;
+  }
+  nodes.forEach(n=>{delete n.dx;delete n.dy;});
+}
+
+/* ================= coloring ================= */
+function colorOptions(){
+  const opts=[];
+  for(const k of G.attrKeys){
+    const vals=new Set();let ok=true;
+    for(const n of G.nodes){const v=n.attrs[k];if(v===undefined)continue;vals.add(String(v));if(vals.size>MAX_GROUPS){ok=false;break;}}
+    if(ok&&vals.size>=2&&vals.size<G.nodes.length)opts.push({key:'a:'+k,label:k});
+  }
+  if(G.nodes.some(n=>n.fill))opts.push({key:'fill',label:'Colors saved in the file'});
+  opts.push({key:'none',label:'One color'});
+  return opts;
+}
+function defaultColorKey(opts){
+  const pref=opts.find(o=>o.key.startsWith('a:')&&/cluster|modularity|community|group|class|partition/i.test(o.label));
+  return (pref||opts.find(o=>o.key.startsWith('a:'))||opts.find(o=>o.key==='fill')||opts[0]).key;
+}
+const groupOf=n=>colorKey==='none'?'All nodes':colorKey==='fill'?(n.fill||'none'):(n.attrs[colorKey.slice(2)]===undefined?'(missing)':String(n.attrs[colorKey.slice(2)]));
+function applyColoring(){
+  hidden.clear(); colorOf=new Map();
+  const counts=new Map(); G.nodes.forEach(n=>{const g=groupOf(n);n.group=g;counts.set(g,(counts.get(g)||0)+1);});
+  groups=[...counts.keys()].sort((a,b)=>{const x=num(a),y=num(b);if(isFinite(x)&&isFinite(y))return x-y;if(a==='(missing)')return 1;if(b==='(missing)')return -1;return a.localeCompare(b);});
+  if(colorKey==='fill')groups.sort((a,b)=>counts.get(b)-counts.get(a));
+  groups.forEach((g,i)=>colorOf.set(g,colorKey==='fill'&&g!=='none'?g:colorKey==='none'?PALETTE[0]:g==='(missing)'?'#a0a7ae':i<PALETTE.length?PALETTE[i]:`hsl(${(i*137.5)%360} 58% 55%)`));
+  G.counts=counts; renderLegend(); syncClButtons();
+}
+function renderLegend(){
+  const el=$('legend'); el.textContent='';
+  const name=colorKey.startsWith('a:')?colorKey.slice(2):'';
+  $('legendHint').hidden=colorKey==='none';
+  for(const g of groups){
+    const members=G.nodes.filter(n=>n.group===g);
+    const top=members.sort((a,b)=>b.rank-a.rank).slice(0,2).map(n=>n.label).join(', ');
+    const b=document.createElement('button');b.className='lg'+(hidden.has(g)?' off':'');b.title=top;b.setAttribute('aria-pressed',String(!hidden.has(g)));
+    const sw=document.createElement('span');sw.className='sw';sw.style.background=colorOf.get(g);
+    const t=document.createElement('span');t.className='t';t.textContent=colorKey==='fill'||colorKey==='none'?g:`${name} ${g}`;
+    if(colorKey!=='none'){const s=document.createElement('small');s.textContent=top;t.appendChild(s);}
+    const c=document.createElement('span');c.className='n';c.textContent=G.counts.get(g);
+    b.append(sw,t,c);
+    b.onclick=()=>{if(colorKey==='none')return;hidden.has(g)?hidden.delete(g):hidden.add(g);renderLegend();draw();};
+    el.appendChild(b);
+  }
+}
+
+/* ================= loading ================= */
+function setLoadStatus(msg,err){const s=$('loadStatus');s.textContent=msg;s.classList.toggle('err',!!err);}
+async function openText(text,name){
+  let g;
+  try{g=parseGML(text);}catch(err){setLoadStatus(`Could not open ${name}: ${err.message}`,true);return false;}
+  const needLayout=prepare(g);
+  if(needLayout){$('busy').hidden=false;await new Promise(r=>requestAnimationFrame(()=>setTimeout(r,30)));layout(g.nodes,g.edges);$('busy').hidden=true;}
+  G={...g,name};
+  const opts=colorOptions(); const sel=$('colorBy'); sel.textContent='';
+  for(const o of opts){const op=document.createElement('option');op.value=o.key;op.textContent=o.label;sel.appendChild(op);}
+  colorKey=defaultColorKey(opts); sel.value=colorKey;
+  allLabels=false; syncLabelButton(); clLabels=[]; closeEditor(); syncClButtons();
+  applyColoring();
+  const tt=name.replace(/\.gml$/i,'').replace(/-SIMILARITY$/i,'');
+  $('title').textContent=tt.charAt(0).toUpperCase()+tt.slice(1);
+  $('meta').textContent=`${G.nodes.length.toLocaleString()} nodes · ${G.edges.length.toLocaleString()} edges${G.directed?' · directed':''}`;
+  const notes=[];if(needLayout)notes.push('no positions in file, layout computed');if(g.skipped)notes.push(g.skipped>1?`${g.skipped} edges pointed to missing nodes and were skipped`:'1 edge pointed to a missing node and was skipped');
+  setLoadStatus(name===SAMPLE_NAME?'':`Opened ${name}${notes.length?' ('+notes.join('; ')+')':''}.`,false);
+  setBase(); fit(); hover=null; draw();
+  return true;
+}
+async function openFile(f){
+  if(!f)return; setLoadStatus(`Reading ${f.name}…`);
+  try{await openText(await f.text(),f.name);}catch(err){setLoadStatus(`Could not read ${f.name}: ${err.message}`,true);}
+}
+$('file').onchange=e=>{openFile(e.target.files[0]);e.target.value='';};
+let dragDepth=0;
+const main=document.querySelector('main');
+main.addEventListener('dragenter',e=>{if([...e.dataTransfer.types].includes('Files')){e.preventDefault();dragDepth++;$('drop').hidden=false;}});
+main.addEventListener('dragover',e=>{if([...e.dataTransfer.types].includes('Files'))e.preventDefault();});
+main.addEventListener('dragleave',()=>{if(--dragDepth<=0){dragDepth=0;$('drop').hidden=true;}});
+main.addEventListener('drop',e=>{e.preventDefault();dragDepth=0;$('drop').hidden=true;openFile(e.dataTransfer.files[0]);});
+$('colorBy').onchange=e=>{colorKey=e.target.value;clLabels=[];closeEditor();applyColoring();syncClButtons();draw();};
+
+/* ================= labels ================= */
+function syncLabelButton(){const b=$('labelToggle');b.textContent=allLabels?'Hide Labels':'Show Labels';b.setAttribute('aria-pressed',String(allLabels));}
+$('labelToggle').onclick=()=>{allLabels=!allLabels;G.nodes.forEach(n=>n.showLabel=allLabels);syncLabelButton();draw();};
+
+/* ================= cluster labels ================= */
+function groupTitle(g){return colorKey.startsWith('a:')?`${colorKey.slice(2)} ${g}`:colorKey==='fill'?`Group ${groups.indexOf(g)+1}`:'All nodes';}
+function placeLabel(g){
+  const mem=G.nodes.filter(n=>n.group===g); if(!mem.length)return null;
+  let cx=0,cy=0;for(const n of mem){cx+=n.x;cy+=n.y;}cx/=mem.length;cy/=mem.length;
+  let gx=0,gy=0;for(const n of G.nodes){gx+=n.x;gy+=n.y;}gx/=G.nodes.length;gy/=G.nodes.length;
+  let dx=cx-gx,dy=cy-gy,d=Math.hypot(dx,dy);
+  if(d<1e-9||groups.length===1){dx=0;dy=1;d=1;} dx/=d;dy/=d;   // world y points up: default above
+  let far=0;for(const n of mem)far=Math.max(far,(n.x-cx)*dx+(n.y-cy)*dy);
+  const margin=34/BASEK;
+  return {x:cx+dx*(far+margin),y:cy+dy*(far+margin)};
+}
+function addClusterLabels(){
+  for(const g of groups){if(clLabels.some(l=>l.group===g))continue;const p=placeLabel(g);if(p)clLabels.push({group:g,text:groupTitle(g),x:p.x,y:p.y});}
+  syncClButtons();fit();draw();
+}
+function syncClButtons(){const missing=groups.some(g=>!clLabels.some(l=>l.group===g));$('clAdd').disabled=!missing;$('clAdd').textContent=clLabels.length&&missing?'Add Missing Labels':'Add Cluster Labels';$('clClear').disabled=!clLabels.length;}
+$('clAdd').onclick=addClusterLabels;
+$('clClear').onclick=()=>{clLabels=[];closeEditor();syncClButtons();draw();};
+$('clStyle').onchange=e=>{clStyle=e.target.value;draw();};
+$('clSize').oninput=e=>{clSize=+e.target.value;draw();};
+const _cc=document.createElement('canvas').getContext('2d');
+function readableOn(color){_cc.fillStyle='#000';_cc.fillStyle=color;const h=_cc.fillStyle;if(h[0]!=='#')return'#ffffff';
+  const r=parseInt(h.slice(1,3),16)/255,g=parseInt(h.slice(3,5),16)/255,b=parseInt(h.slice(5,7),16)/255;
+  const L=x=>x<=.03928?x/12.92:((x+.055)/1.055)**2.4;return (0.2126*L(r)+0.7152*L(g)+0.0722*L(b))>0.4?'#111820':'#ffffff';}
+function paintClusterLabels(c,P,theme,scale,boxes){
+  if(!clLabels.length)return;
+  c.textAlign='center';c.textBaseline='middle';c.lineJoin='round';
+  for(const l of clLabels){
+    const col=colorOf.get(l.group)||'#888'; const [x,y]=P(l); const fs=clSize*scale;
+    c.font=`600 ${fs}px "Space Grotesk", Inter, system-ui, sans-serif`;
+    const lines=l.text.split('\n'), lh=fs*1.2, th=fs+(lines.length-1)*lh;
+    const tw=Math.max(...lines.map(t=>c.measureText(t).width)), padX=(clStyle==='badge'?0.6:0.25)*fs, padY=(clStyle==='badge'?0.38:0.15)*fs;
+    const bx=x-tw/2-padX, by=y-th/2-padY, bw=tw+padX*2, bh=th+padY*2;
+    c.globalAlpha=hidden.has(l.group)?0.3:1;
+    const y0=y-th/2+fs/2;
+    if(clStyle==='badge'){c.fillStyle=col;c.beginPath();c.roundRect(bx,by,bw,bh,Math.min(bh/2,fs*0.9));c.fill();c.fillStyle=readableOn(col);lines.forEach((t,i)=>c.fillText(t,x,y0+i*lh+fs*0.03));}
+    else{c.lineWidth=Math.max(3,fs*0.28);c.strokeStyle=theme.halo;lines.forEach((t,i)=>c.strokeText(t,x,y0+i*lh));c.fillStyle=col;lines.forEach((t,i)=>c.fillText(t,x,y0+i*lh));}
+    if(boxes){boxes.push({l,x:bx,y:by,w:bw,h:bh});
+      if(l===clEditing||l===clHover){c.globalAlpha=1;c.setLineDash(l===clEditing?[5,4]:[]);c.lineWidth=1.5;c.strokeStyle=l===clEditing?theme.label:col;c.beginPath();c.roundRect(bx-4,by-3,bw+8,bh+6,6);c.stroke();c.setLineDash([]);}}
+  }
+  c.globalAlpha=1;
+}
+function clHit(mx,my){for(let i=clBoxes.length-1;i>=0;i--){const b=clBoxes[i];if(mx>=b.x-4&&mx<=b.x+b.w+4&&my>=b.y-4&&my<=b.y+b.h+4)return b.l;}return null;}
+const toWorld=(sx,sy)=>[(sx-view.tx)/view.k,-(sy-view.ty)/view.k];
+let edOrig='';
+const cleanText=v=>v.replace(/\r/g,'').split('\n').map(t=>t.trim()).join('\n').replace(/^\n+|\n+$/g,'').replace(/\n{3,}/g,'\n\n');
+function openEditor(l){
+  clEditing=l;edOrig=l.text;draw();
+  const ed=$('clEd'),inp=$('clEdText');inp.value=l.text;ed.hidden=false;
+  requestAnimationFrame(()=>{const b=clBoxes.find(b=>b.l===l);if(!b)return;const ew=ed.offsetWidth,eh=ed.offsetHeight;
+    let x=b.x+b.w/2-ew/2,y=b.y+b.h+10;if(y+eh>H-8)y=b.y-eh-10;x=Math.min(Math.max(8,x),W-ew-8);y=Math.max(8,y);
+    ed.style.left=x+'px';ed.style.top=y+'px';inp.focus();inp.select();});
+}
+function closeEditor(commit=true){
+  if(!clEditing){$('clEd').hidden=true;return;}
+  const l=clEditing;if(commit){const t=cleanText($('clEdText').value);l.text=t||edOrig;}else l.text=edOrig;
+  clEditing=null;$('clEd').hidden=true;draw();
+}
+$('clEdText').addEventListener('input',e=>{if(clEditing){clEditing.text=e.target.value.replace(/\r/g,'')||' ';draw();}});
+$('clEdText').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();closeEditor(true);}else if(e.key==='Escape'){e.preventDefault();closeEditor(false);}});
+$('clEdDone').onclick=()=>closeEditor(true);
+$('clEdDel').onclick=()=>{const l=clEditing;clEditing=null;$('clEd').hidden=true;clLabels=clLabels.filter(x=>x!==l);syncClButtons();draw();};
+
+/* ================= drawing ================= */
+function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+function bounds(){let x0=1/0,y0=1/0,x1=-1/0,y1=-1/0;for(const n of G.nodes){x0=Math.min(x0,n.x);y0=Math.min(y0,n.y);x1=Math.max(x1,n.x);y1=Math.max(y1,n.y);}if(x1===x0){x0-=1;x1+=1;}if(y1===y0){y0-=1;y1+=1;}return{x0,y0,x1,y1};}
+function setBase(){const b=bounds();BASEK=Math.min((W-120)/(b.x1-b.x0),(H-120)/(b.y1-b.y0));if(!(BASEK>0))BASEK=1;}
+function labelBounds(b,k,scale){
+  if(!clLabels.length)return b; const o={...b}; const fs=clSize*scale;
+  _cc.font=`600 ${fs}px "Space Grotesk", Inter, system-ui, sans-serif`;
+  const padX=(clStyle==='badge'?0.6:0.25)*fs+8*scale, padY=(clStyle==='badge'?0.38:0.15)*fs+8*scale;
+  for(const l of clLabels){const lines=l.text.split('\n'),th=fs+(lines.length-1)*fs*1.2;
+    const hw=(Math.max(...lines.map(t=>_cc.measureText(t).width))/2+padX)/k, hh=(th/2+padY)/k;
+    o.x0=Math.min(o.x0,l.x-hw);o.x1=Math.max(o.x1,l.x+hw);o.y0=Math.min(o.y0,l.y-hh);o.y1=Math.max(o.y1,l.y+hh);}
+  return o;
+}
+function fit(){
+  let b=bounds(),k=BASEK;
+  if(clLabels.length){const b0=b;for(let i=0;i<3;i++){b=labelBounds(b0,k,1);k=Math.min(BASEK,(W-40)/(b.x1-b.x0),(H-40)/(b.y1-b.y0));}}
+  view.k=k;view.tx=W/2-k*(b.x0+b.x1)/2;view.ty=H/2+k*(b.y0+b.y1)/2;
+}
+function resize(){const r=cv.getBoundingClientRect();const first=!W;DPR=window.devicePixelRatio||1;W=r.width;H=r.height;cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR);if(G.nodes.length){const old=BASEK;setBase();if(first)fit();else{const f=BASEK/old;view.k*=f;}}draw();}
+// density-aware base node size so big graphs don't become a blob
+const baseR=()=>Math.max(1.6,Math.min(1,14/Math.sqrt(G.nodes.length||1))*3);
+const nodeR=(n,rel)=>Math.max(1.5,(baseR()+n.sn*baseR()*3)*Math.sqrt(rel));
+const labelPx=n=>11+n.sn*5;
+
+function paint(c,{w,h,k,tx,ty,theme,hl,scale=1,rel=1,boxes=null}){
+  c.fillStyle=theme.canvas;c.fillRect(0,0,w,h);
+  // file y axis points up (Gephi convention), screen y points down
+  const P=n=>[n.x*k+tx,-n.y*k+ty];
+  const vis=n=>!hidden.has(n.group);
+  const dense=Math.min(1,600/(G.edges.length||1));
+  c.lineCap='round';
+  for(const e of G.edges){
+    if(e.a===e.b)continue;
+    const on=vis(e.a)&&vis(e.b), lit=hl&&(e.a===hl||e.b===hl);
+    // edges inside a group take the group's color; edges between groups are dark grey
+    const same=e.a.group===e.b.group;
+    let a=on?(0.5+e.wn*0.45)*(0.45+0.55*dense):0.05; if(hl&&!lit)a*=0.3; if(lit)a=0.95;
+    c.globalAlpha=Math.min(1,a);
+    c.strokeStyle=same?colorOf.get(e.a.group):theme.inter;
+    const lw=(0.4+e.wn*2)*scale*Math.min(1.6,Math.sqrt(rel))*(0.5+0.5*dense);
+    c.lineWidth=lw;
+    const [x1,y1]=P(e.a),[x2,y2]=P(e.b);c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.stroke();
+    if(G.directed&&(on||lit)){const r=nodeR(e.b,rel)*scale,ang=Math.atan2(y2-y1,x2-x1),hx=x2-Math.cos(ang)*(r+1),hy=y2-Math.sin(ang)*(r+1),s=Math.max(4*scale,lw*3);
+      c.fillStyle=c.strokeStyle;c.beginPath();c.moveTo(hx,hy);c.lineTo(hx-Math.cos(ang-.4)*s,hy-Math.sin(ang-.4)*s);c.lineTo(hx-Math.cos(ang+.4)*s,hy-Math.sin(ang+.4)*s);c.closePath();c.fill();}
+  }
+  c.globalAlpha=1;
+  const order=G.order||(G.order=[...G.nodes].sort((a,b)=>a.rank-b.rank));
+  for(const n of order){
+    const [x,y]=P(n);if(x<-50||y<-50||x>w+50||y>h+50)continue;
+    const r=nodeR(n,rel)*scale, dim=!vis(n)||(hl&&n!==hl&&!hl.nb.has(n));
+    c.globalAlpha=dim?0.18:1;c.fillStyle=colorOf.get(n.group);c.beginPath();c.arc(x,y,r,0,Math.PI*2);c.fill();
+    if(r>2.5){c.lineWidth=Math.min(1.2,r/4)*scale;c.strokeStyle=theme.canvas;c.stroke();}
+    if(n===hl){c.lineWidth=2*scale;c.strokeStyle=theme.label;c.beginPath();c.arc(x,y,r+3*scale,0,Math.PI*2);c.stroke();}
+  }
+  c.globalAlpha=1;c.textAlign='center';c.textBaseline='bottom';c.lineJoin='round';
+  for(const n of order){
+    if(!n.showLabel&&n!==hl)continue; if(hidden.has(n.group)&&n!==hl)continue;
+    const [x,y]=P(n);if(x<-200||y<-50||x>w+200||y>h+50)continue;
+    const r=nodeR(n,rel)*scale, fs=labelPx(n)*scale;
+    c.font=`${n.sn>.5?600:500} ${fs}px Inter, system-ui, sans-serif`;
+    c.globalAlpha=(hl&&n!==hl&&!hl.nb.has(n))?0.3:1;
+    c.lineWidth=3.5*scale;c.strokeStyle=theme.halo;c.strokeText(n.label,x,y-r-2*scale);
+    c.fillStyle=theme.label;c.fillText(n.label,x,y-r-2*scale);
+  }
+  c.globalAlpha=1;
+  paintClusterLabels(c,P,theme,scale,boxes);
+}
+function theme(){return{inter:css('--inter'),canvas:css('--canvas'),edge:css('--edge'),label:css('--label'),halo:css('--halo')};}
+let raf=0;
+function draw(){if(raf)return;raf=requestAnimationFrame(()=>{raf=0;if(!W||!G.nodes.length)return;ctx.setTransform(DPR,0,0,DPR,0,0);paint(ctx,{w:W,h:H,k:view.k,tx:view.tx,ty:view.ty,theme:theme(),hl:hover,rel:view.k/BASEK,boxes:(clBoxes=[])});});}
+
+/* ================= interaction ================= */
+function hit(mx,my){let best=null,bd=1/0;const rel=view.k/BASEK;for(const n of G.nodes){if(hidden.has(n.group))continue;const x=n.x*view.k+view.tx,y=-n.y*view.k+view.ty,r=Math.max(nodeR(n,rel),7);const d=Math.hypot(mx-x,my-y);if(d<=r&&d<bd){bd=d;best=n;}}return best;}
+function zoomAt(f,mx,my){const k2=Math.min(Math.max(view.k*f,BASEK*0.2),BASEK*60);f=k2/view.k;view.tx=mx-(mx-view.tx)*f;view.ty=my-(my-view.ty)*f;view.k=k2;draw();}
+const ptrs=new Map(); let down=null,pinch=null;
+function pos(e){const r=cv.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top];}
+cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);const p=pos(e);ptrs.set(e.pointerId,p);
+  if(ptrs.size===1){down={x:p[0],y:p[1],tx:view.tx,ty:view.ty,moved:false,lab:null};
+    if(clEditing)closeEditor(true);
+    const l=clHit(p[0],p[1]);if(l){const w=toWorld(p[0],p[1]);down.lab=l;down.off=[l.x-w[0],l.y-w[1]];}}
+  else if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch={d:Math.hypot(a[0]-b[0],a[1]-b[1]),k:view.k};if(down)down.moved=true;}});
+cv.addEventListener('pointermove',e=>{const p=pos(e);
+  if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,p);
+  if(pinch&&ptrs.size===2){const [a,b]=[...ptrs.values()];const d=Math.hypot(a[0]-b[0],a[1]-b[1]);zoomAt(pinch.k*d/pinch.d/view.k,(a[0]+b[0])/2,(a[1]+b[1])/2);return;}
+  if(down&&ptrs.size===1){const dx=p[0]-down.x,dy=p[1]-down.y;if(Math.hypot(dx,dy)>4){down.moved=true;cv.classList.add('drag');}
+    if(down.moved&&down.lab){const w=toWorld(p[0],p[1]);down.lab.x=w[0]+down.off[0];down.lab.y=w[1]+down.off[1];tip.hidden=true;draw();return;}
+    if(down.moved){view.tx=down.tx+dx;view.ty=down.ty+dy;tip.hidden=true;draw();return;}}
+  if(e.pointerType==='mouse'){const l=clHit(p[0],p[1]);if(l!==clHover){clHover=l;draw();}cv.classList.toggle('move',!!l);
+    const n=l?null:hit(p[0],p[1]);cv.classList.toggle('over',!!n);if(n!==hover){hover=n;draw();}showTip(n,p);}
+});
+function end(e){const p=pos(e);ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;cv.classList.remove('drag');
+  if(down&&down.lab&&!down.moved&&ptrs.size===0){openEditor(down.lab);down=null;return;}
+  if(down&&!down.moved&&ptrs.size===0){const n=hit(p[0],p[1]);if(n){n.showLabel=!n.showLabel;draw();showTip(n,p);if(e.pointerType!=='mouse')setTimeout(()=>tip.hidden=true,1800);}}
+  if(ptrs.size===0)down=null;}
+cv.addEventListener('pointerup',end);cv.addEventListener('pointercancel',end);
+cv.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse'&&!down){hover=null;clHover=null;tip.hidden=true;cv.classList.remove('over','move');draw();}});
+cv.addEventListener('wheel',e=>{e.preventDefault();if(clEditing)closeEditor(true);const [x,y]=pos(e);zoomAt(Math.exp(-e.deltaY*0.0015),x,y);},{passive:false});
+function fmtVal(v){const n=num(v);if(typeof v==='string'&&!isFinite(n))return v.length>60?v.slice(0,57)+'…':v;if(!isFinite(n))return String(v);return Number.isInteger(n)?n.toLocaleString():(Math.abs(n)<1?n.toFixed(4):n.toLocaleString(undefined,{maximumFractionDigits:3}));}
+function showTip(n,p){if(!n){tip.hidden=true;return;}tip.textContent='';const b=document.createElement('b');b.textContent=n.label;tip.appendChild(b);
+  const t=document.createElement('table');
+  const rows=Object.entries(n.attrs).slice(0,12).map(([k,v])=>[k,fmtVal(v)]);rows.push(['Connections',n.nb.size.toLocaleString()],['Label',n.showLabel?'visible':'hidden']);
+  for(const [k,v] of rows){const tr=t.insertRow();tr.insertCell().textContent=k;tr.insertCell().textContent=v;}tip.appendChild(t);tip.hidden=false;
+  const tw=tip.offsetWidth,th=tip.offsetHeight;let x=p[0]+14,y=p[1]+14;if(x+tw>W-8)x=p[0]-tw-14;if(y+th>H-8)y=p[1]-th-14;tip.style.left=Math.max(8,x)+'px';tip.style.top=Math.max(8,y)+'px';}
+$('zin').onclick=()=>zoomAt(1.3,W/2,H/2);
+$('zout').onclick=()=>zoomAt(1/1.3,W/2,H/2);
+$('zfit').onclick=()=>{fit();draw();};
+new ResizeObserver(resize).observe(cv);
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',draw);
+new MutationObserver(draw).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+
+/* ================= export ================= */
+const LIGHT={inter:'#4a4f56',canvas:'#ffffff',edge:'23,32,42',label:'#17202a',halo:'rgba(255,255,255,.9)'};
+function renderExport(withLegend){
+  const b0=bounds(),targetW=3000,pad=110;
+  withLegend=withLegend&&colorKey!=='none';
+  const shown=groups.slice(0,30), legendW=withLegend?620:0;
+  const gw=targetW-legendW-pad*2, screenFitW=Math.max(600,W-120), sc=gw/screenFitW;
+  let b=b0,k=gw/(b.x1-b.x0);
+  for(let i=0;i<4;i++){b=labelBounds(b0,k,sc);k=gw/(b.x1-b.x0);}
+  const gh=(b.y1-b.y0)*k;
+  const h=Math.max(Math.round(gh+pad*2),withLegend?shown.length*64+300:0,600);
+  const c=document.createElement('canvas');c.width=targetW;c.height=h;const x=c.getContext('2d');
+  // match the on-screen "fit" look, scaled up
+  paint(x,{w:targetW,h,k,tx:pad-b.x0*k,ty:(h-gh)/2+b.y1*k,theme:LIGHT,hl:null,scale:sc,rel:1});
+  if(withLegend){
+    const lx=targetW-legendW+20;let ly=pad;x.textAlign='left';x.textBaseline='middle';
+    x.fillStyle='#17202a';x.font='600 40px "Space Grotesk", Inter, sans-serif';
+    x.fillText(colorKey==='fill'?'Colors':colorKey.slice(2),lx,ly);ly+=70;
+    for(const g of shown){x.globalAlpha=hidden.has(g)?0.3:1;x.fillStyle=colorOf.get(g);x.beginPath();x.arc(lx+16,ly,16,0,Math.PI*2);x.fill();
+      x.fillStyle='#17202a';x.font='500 32px Inter, sans-serif';let t=String(g);if(t.length>22)t=t.slice(0,21)+'…';x.fillText(t,lx+50,ly);
+      x.fillStyle='#5b6774';x.font='400 26px Inter, sans-serif';x.textAlign='right';x.fillText(`${G.counts.get(g)} nodes`,targetW-40,ly);x.textAlign='left';ly+=64;}
+    if(groups.length>shown.length){x.fillStyle='#5b6774';x.font='400 26px Inter, sans-serif';x.fillText(`+ ${groups.length-shown.length} more`,lx,ly);}
+    x.globalAlpha=1;
+  }
+  return c;
+}
+function crc32(u8){let c,t=crc32.t;if(!t){t=crc32.t=new Uint32Array(256);for(let n=0;n<256;n++){c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}}c=0xFFFFFFFF;for(let i=0;i<u8.length;i++)c=t[(c^u8[i])&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0;}
+function encodeTIFF(canvas,dpi=300){
+  const w=canvas.width,h=canvas.height,px=canvas.getContext('2d').getImageData(0,0,w,h).data;
+  const N=13,ifd=8,bps=ifd+2+N*12+4,xr=bps+6,yr=xr+8,img=yr+8,len=w*h*3;
+  const buf=new ArrayBuffer(img+len),dv=new DataView(buf),u8=new Uint8Array(buf);
+  u8[0]=0x49;u8[1]=0x49;dv.setUint16(2,42,true);dv.setUint32(4,ifd,true);dv.setUint16(ifd,N,true);
+  const tags=[[256,4,1,w],[257,4,1,h],[258,3,3,bps],[259,3,1,1],[262,3,1,2],[273,4,1,img],[277,3,1,3],[278,4,1,h],[279,4,1,len],[282,5,1,xr],[283,5,1,yr],[284,3,1,1],[296,3,1,2]];
+  tags.forEach(([tag,type,count,val],i)=>{const o=ifd+2+i*12;dv.setUint16(o,tag,true);dv.setUint16(o+2,type,true);dv.setUint32(o+4,count,true);
+    if(type===3&&count===1)dv.setUint16(o+8,val,true);else dv.setUint32(o+8,val,true);});
+  dv.setUint32(ifd+2+N*12,0,true);
+  dv.setUint16(bps,8,true);dv.setUint16(bps+2,8,true);dv.setUint16(bps+4,8,true);
+  dv.setUint32(xr,dpi,true);dv.setUint32(xr+4,1,true);dv.setUint32(yr,dpi,true);dv.setUint32(yr+4,1,true);
+  for(let i=0,j=img;i<px.length;i+=4){u8[j++]=px[i];u8[j++]=px[i+1];u8[j++]=px[i+2];}
+  return u8;
+}
+function zipStore(name,data){
+  const nm=new TextEncoder().encode(name),crc=crc32(data),sz=data.length;
+  const lh=new Uint8Array(30+nm.length),cd=new Uint8Array(46+nm.length),eo=new Uint8Array(22);
+  const L=new DataView(lh.buffer),C=new DataView(cd.buffer),E=new DataView(eo.buffer);
+  L.setUint32(0,0x04034b50,true);L.setUint16(4,20,true);L.setUint32(14,crc,true);L.setUint32(18,sz,true);L.setUint32(22,sz,true);L.setUint16(26,nm.length,true);lh.set(nm,30);
+  C.setUint32(0,0x02014b50,true);C.setUint16(4,20,true);C.setUint16(6,20,true);C.setUint32(16,crc,true);C.setUint32(20,sz,true);C.setUint32(24,sz,true);C.setUint16(28,nm.length,true);cd.set(nm,46);
+  E.setUint32(0,0x06054b50,true);E.setUint16(8,1,true);E.setUint16(10,1,true);E.setUint32(12,cd.length,true);E.setUint32(16,lh.length+sz,true);
+  return new Blob([lh,data,cd,eo]);
+}
+const toBlob=(c,type,q)=>new Promise(r=>c.toBlob(r,type,q));
+let downloads=null;
+(async()=>{try{downloads=await window.claude?.use?.('downloads');}catch(e){downloads=null;}})();
+$('save').onclick=async()=>{
+  const st=$('status'),fmt=document.querySelector('input[name=fmt]:checked').value;
+  const base=(G.name||'graph').replace(/\.gml$/i,'').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'_')||'graph';
+  st.classList.remove('err');st.textContent='Rendering…';
+  try{
+    await document.fonts.ready;
+    const c=renderExport($('incLegend').checked);
+    let blob,filename;
+    if(fmt==='png'){blob=await toBlob(c,'image/png');filename=base+'.png';}
+    else if(fmt==='jpeg'){blob=await toBlob(c,'image/jpeg',0.95);filename=base+'.jpg';}
+    else{const t=encodeTIFF(c);filename=base+'.tiff';blob=new Blob([t],{type:'image/tiff'});if(downloads){blob=zipStore(filename,t);filename=base+'_tiff.zip';}}
+    if(downloads){await downloads.save({filename,data:blob});st.textContent=fmt==='tiff'?`Saved ${filename} (the TIFF is inside the zip).`:`Saved ${filename}.`;}
+    else{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);st.textContent=`Saved ${filename} (${c.width}×${c.height}px).`;}
+  }catch(err){
+    const code=err&&err.code;st.classList.toggle('err',code!=='declined');
+    st.textContent=code==='declined'?'Save cancelled.':code==='rate_limited'?'Another save is waiting for confirmation. Try again in a moment.':`Could not save: ${err.message||code||err}`;
+  }
+};
+
+/* ================= boot ================= */
+requestAnimationFrame(()=>{const r=cv.getBoundingClientRect();W=r.width;H=r.height;DPR=window.devicePixelRatio||1;cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR);
+  openText($('sample').textContent,SAMPLE_NAME);document.fonts.ready.then(draw);});
+</script>
